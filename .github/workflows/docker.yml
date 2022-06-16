@@ -32,6 +32,11 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: ${{ secrets.DOCKER_HUB_USERNAME }}/js-rpc-server:latest
+          platforms: |
+            linux/amd64
+            linux/arm/v6
+            linux/arm/v7
+            linux/arm64/v8
       
       # 打印 docker 镜像 SHA256 Hash 值
       - name: Image digest
