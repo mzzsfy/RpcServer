@@ -99,13 +99,13 @@ rpcClient.prototype.regAction = function (func_name, func) {
     return this
 }
 
-async function sleep(time) {
-    return new Promise(resolve => setTimeout(resolve, time))
-}
-
-new rpcClient("ws://127.0.0.1:18880/ws?group=test")
-    .regAction('sleep', async p => ((await sleep(100)),p + "#" + Math.random()))
-    .regAction('test', p => {
-    return p + "#" + Math.random();
-})
+// async function sleep(time) {
+//     return new Promise(resolve => setTimeout(resolve, time))
+// }
+//
+// new rpcClient("ws://127.0.0.1:18880/ws?group=test")
+//     .regAction('sleep', async p => ((await sleep(100)),p + "#" + Math.random()))
+//     .regAction('test', p => {
+//     return p + "#" + Math.random();
+// })
 // http://127.0.0.1:18880/call?group=test&name=*&action=test&param=123
