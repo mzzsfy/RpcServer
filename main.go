@@ -155,12 +155,21 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
     sendNow := make(chan interface{})
     go func() {
         var w []*Message
+        num := 5
         for {
+            if num > 300 {
+                num = 300
+            }
+            if num < 0 {
+                num = 0
+            }
             select {
             case <-time.After(10 * time.Millisecond):
+                num--
                 if len(w) == 0 {
                     continue
                 }
+                log.Info("111", zap.Any("num", num))
                 err := conn.WriteJSON(w)
                 w = []*Message{}
                 if err != nil {
@@ -170,7 +179,10 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
                 conn.WriteJSON(message)
             case message := <-m.sender:
                 w = append(w, message)
-                if len(w) >= 100 {
+                if len(w) >= num {
+                    if len(m.sender) > 0 {
+                        num++
+                    }
                     err := conn.WriteJSON(w)
                     w = []*Message{}
                     if err != nil {
@@ -418,34 +430,26 @@ func init() {
 func newAsyncConsole() *asyncConsole {
     cache := make(chan string, 1000)
     go func() {
-        var bs []string
+        num := 0
         for {
             select {
             case b := <-cache:
-                bs = append(bs, b)
-                if len(bs) >= 100 {
-                    for _, bw := range bs {
-                        os.Stdout.WriteString(bw)
-                    }
-                    bs = []string{}
-                    i := len(cache)
-                    if i > 100 {
-                        os.Stdout.WriteString(fmt.Sprintln("待写入日志过多,丢弃", i, "条"))
-                    }
+                num++
+                os.Stdout.WriteString(b)
+                i := len(cache)
+                if i > 200 {
+                    os.Stdout.WriteString(fmt.Sprintln("待写入日志过多,丢弃", i, "条"))
                     for j := 0; j < i; j++ {
                         <-cache
                     }
                     os.Stdout.Sync()
-                }
-            case <-time.After(3 * time.Millisecond):
-                if len(bs) == 0 {
                     continue
                 }
-                for _, bw := range bs {
-                    os.Stdout.WriteString(bw)
+                if num%100 == 0 {
+                    os.Stdout.Sync()
                 }
+            case <-time.After(10 * time.Millisecond):
                 os.Stdout.Sync()
-                bs = []string{}
             }
         }
     }()
