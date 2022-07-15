@@ -356,7 +356,7 @@ func exec(w http.ResponseWriter, r *http.Request) {
         return
     }
     code := query.Get("code")
-    doExec(w, name, groupName, "_execjs", code)
+    doExec(w, name, groupName, "__exec", code)
 }
 
 func list(w http.ResponseWriter, r *http.Request) {

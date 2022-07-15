@@ -5,7 +5,7 @@ function rpcClient(wsURL) {
     this.wsURL = wsURL
     this.socket = {}
     this.handlers = {
-        "_execjs": async param => (await new Function(param).call(this)) || "没有返回值"
+        "__exec": (async param => (await new Function(param).call(this))) || "没有返回值"
     }
     this.connect()
     setInterval(() => this.socket.send("[]"), 25 * 1000)
