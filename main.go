@@ -179,6 +179,9 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
                 w = []*Message{}
                 if err != nil {
                     log.Info("发送失败", zap.Error(err))
+                    if strings.Contains(err.Error(), "broken pipe") {
+                        conn.Close()
+                    }
                 }
             case message := <-sendNow:
                 conn.WriteJSON(message)
