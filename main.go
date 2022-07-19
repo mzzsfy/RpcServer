@@ -154,6 +154,12 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
     over := make(chan string)
     sendNow := make(chan interface{})
     go func() {
+        for {
+            time.Sleep(20 * time.Second)
+            sendNow <- []interface{}{}
+        }
+    }()
+    go func() {
         var w []*Message
         num := 5
         for {
