@@ -211,6 +211,9 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
             _, b, err := conn.ReadMessage()
             count := bytes.Count(b, []byte("{\"id\":\""))
             if err != nil {
+                if os.IsTimeout(err) {
+                    continue
+                }
                 allWs.del(groupName, memberName)
                 over <- "over"
                 log.Info("读取错误:", zap.Error(err))
