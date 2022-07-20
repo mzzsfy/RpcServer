@@ -156,7 +156,11 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
     go func() {
         for {
             time.Sleep(20 * time.Second)
-            sendNow <- []interface{}{}
+            select {
+            case sendNow <- []interface{}{}:
+            case <-time.After(time.Second):
+                return
+            }
         }
     }()
     go func() {
