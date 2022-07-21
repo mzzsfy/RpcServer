@@ -21,7 +21,17 @@ var (
     messagePool = sync.Pool{New: func() interface{} { return &Message{} }}
     resultPool  = sync.Pool{New: func() interface{} { return &Result{} }}
     log         *zap.Logger
+    callToken   = os.Getenv("TOKEN")
+    wsToken     = env("WS_TOKEN", callToken)
 )
+
+func env(name, defaultValue string) string {
+    val := os.Getenv(name)
+    if val == "" {
+        return defaultValue
+    }
+    return val
+}
 
 type all struct {
     data sync.Map
@@ -264,6 +274,14 @@ func wsIndex(w http.ResponseWriter, r *http.Request) {
     if "true" == query.Get("randomSuffix") {
         name = name + "__" + generateId()
     }
+    if wsToken != query.Get("token") {
+        log.Info("token错误", zap.Any("token", query.Get("token")))
+        result := NewResult(1, nil, "token错误")
+        defer resultPool.Put(result)
+        marshal, _ := json.Marshal(result)
+        w.Write(marshal)
+        return
+    }
     up := &websocket.Upgrader{
         CheckOrigin: func(r *http.Request) bool { return true },
     }
@@ -295,12 +313,21 @@ func call(w http.ResponseWriter, r *http.Request) {
         w.Write([]byte("缺少必须参数 action: " + action))
         return
     }
-    doExec(w, name, groupName, action, param)
+    doExec(r, w, name, groupName, action, param)
 }
 
-func doExec(w http.ResponseWriter, name string, groupName string, action string, param string) {
+func doExec(r *http.Request, w http.ResponseWriter, name string, groupName string, action string, param string) {
     start := time.Now()
     w.Header().Set("content-type", "application/json; charset=utf-8")
+    query := r.URL.Query()
+    if callToken != query.Get("token") {
+        log.Info("token错误", zap.Any("token", query.Get("token")))
+        result := NewResult(1, nil, "token错误")
+        defer resultPool.Put(result)
+        marshal, _ := json.Marshal(result)
+        w.Write(marshal)
+        return
+    }
     var m *member
     if strings.Contains(name, "*") {
         m = allWs.loadLike(groupName, name)
@@ -366,7 +393,7 @@ func exec(w http.ResponseWriter, r *http.Request) {
         return
     }
     code := query.Get("code")
-    doExec(w, name, groupName, "__exec", code)
+    doExec(r, w, name, groupName, "__exec", code)
 }
 
 func list(w http.ResponseWriter, r *http.Request) {
@@ -422,6 +449,7 @@ func main() {
     regHandle("/ws", wsIndex)
     regHandle("/list", list)
     log.Info("启动服务,端口:18880")
+    log.Info("当前token设置", zap.Any("token", callToken), zap.Any("wsToken", wsToken))
     err := http.ListenAndServe(":18880", nil)
     if err != nil {
         log.Error("启动服务错误", zap.Error(err))
