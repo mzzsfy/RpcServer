@@ -168,12 +168,12 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
     }
     messages := &m.messages
     over := make(chan string)
-    sendNow := make(chan interface{})
+    sendNow := make(chan []*Message)
     go func() {
         for {
             time.Sleep(20 * time.Second)
             select {
-            case sendNow <- []interface{}{}:
+            case sendNow <- []*Message{}:
             case <-time.After(time.Second):
                 return
             }
@@ -197,8 +197,7 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
                 }
                 doSend(conn, &w)
             case message := <-sendNow:
-                conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-                conn.WriteJSON(message)
+                doSend(conn, &message)
             case message := <-m.sender:
                 w = append(w, message)
                 if len(w) >= num {
@@ -246,7 +245,7 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
                 }
             }
             if len(arr) == 0 {
-                sendNow <- []interface{}{}
+                sendNow <- []*Message{}
             }
         }
     }()
@@ -254,6 +253,7 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
 }
 
 func doSend(conn *websocket.Conn, w *[]*Message) {
+    conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
     err := conn.WriteJSON(w)
     if err != nil {
         log.Info("发送失败", zap.Error(err))
