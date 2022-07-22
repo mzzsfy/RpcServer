@@ -45,7 +45,7 @@ func (a *all) saveWs(groupName, memberName string, conn *websocket.Conn, r *http
     infoStr := r.URL.Query().Get("clientInfo")
     info := make(map[string]string)
     if infoStr != "" {
-        if strings.HasPrefix(infoStr, "{") && strings.HasPrefix(infoStr, "}") {
+        if strings.HasPrefix(infoStr, "{") && strings.HasSuffix(infoStr, "}") {
             err := json.Unmarshal([]byte(infoStr), &info)
             if err != nil {
                 info["clientInfo"] = infoStr
