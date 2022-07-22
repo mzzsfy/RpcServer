@@ -44,13 +44,15 @@ func (a *all) saveWs(groupName, memberName string, conn *websocket.Conn, r *http
     }
     infoStr := r.URL.Query().Get("clientInfo")
     info := make(map[string]string)
-    if strings.HasPrefix(infoStr, "{") && strings.HasPrefix(infoStr, "}") {
-        err := json.Unmarshal([]byte(infoStr), &info)
-        if err != nil {
+    if infoStr != "" {
+        if strings.HasPrefix(infoStr, "{") && strings.HasPrefix(infoStr, "}") {
+            err := json.Unmarshal([]byte(infoStr), &info)
+            if err != nil {
+                info["clientInfo"] = infoStr
+            }
+        } else {
             info["clientInfo"] = infoStr
         }
-    } else {
-        info["clientInfo"] = infoStr
     }
     g.members.Store(memberName, NewMember(groupName, memberName, conn, info))
 }
