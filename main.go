@@ -424,13 +424,19 @@ func list(w http.ResponseWriter, r *http.Request) {
                 v[m.groupName] = m2
             }
             m2[m.name] = struct {
-                Status     string        `json:"status"`
-                SendNumber int32         `json:"sendNumber"`
-                Waiting    int32         `json:"waiting"`
-                SuccessNum int32         `json:"successNum"`
-                Start      time.Time     `json:"start"`
-                ConnTime   time.Duration `json:"connTime"`
-            }{"ok", m.sendNum, m.waiting, m.successNum, m.start, time.Now().Sub(m.start)}
+                Status     string `json:"status"`
+                SendNumber int32  `json:"sendNumber"`
+                Waiting    int32  `json:"waiting"`
+                SuccessNum int32  `json:"successNum"`
+                Start      string `json:"start"`
+                ConnTime   string `json:"connTime"`
+            }{"ok",
+                m.sendNum,
+                m.waiting,
+                m.successNum,
+                m.start.Format(time.RFC3339),
+                time.Now().Sub(m.start).String(),
+            }
             return true
         })
         return true
