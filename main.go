@@ -37,19 +37,6 @@ func env(name, defaultValue string) string {
     return val
 }
 
-func doSend(conn *websocket.Conn, w *[]*Message) {
-    conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-    err := conn.WriteJSON(w)
-    if err != nil {
-        log.Info("发送失败", zap.Error(err))
-        e := err.Error()
-        for _, m := range *w {
-            m.callBack <- NewResult(1, nil, e)
-        }
-    }
-    *w = []*Message{}
-}
-
 func index(w http.ResponseWriter, r *http.Request) {
     w.Write([]byte("一个测试服务"))
 }
@@ -111,10 +98,10 @@ func call(w http.ResponseWriter, r *http.Request) {
     doExec(r, w, name, groupName, action, param)
 }
 
-func doExec(r *http.Request, w http.ResponseWriter, name string, groupName string, action string, param string) {
+func doExec(req *http.Request, w http.ResponseWriter, name string, groupName string, action string, param string) {
     start := time.Now()
     w.Header().Set("content-type", "application/json; charset=utf-8")
-    query := r.URL.Query()
+    query := req.URL.Query()
     if callToken != query.Get("token") {
         log.Info("token错误", zap.Any("token", query.Get("token")))
         result := NewResult(1, nil, "token错误")
