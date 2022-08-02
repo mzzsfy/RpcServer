@@ -1,7 +1,6 @@
 package main
 
 import (
-    "bytes"
     "encoding/json"
     "fmt"
     "github.com/gorilla/websocket"
@@ -23,7 +22,12 @@ var (
     log         *zap.Logger
     callToken   = os.Getenv("TOKEN")
     wsToken     = env("WS_TOKEN", callToken)
+    selectToken = env("SELECT_TOKEN", callToken)
 )
+
+func init() {
+    onNewAll(&allWs)
+}
 
 func env(name, defaultValue string) string {
     val, b := os.LookupEnv(name)
@@ -31,239 +35,6 @@ func env(name, defaultValue string) string {
         return defaultValue
     }
     return val
-}
-
-func (a *all) saveWs(groupName, memberName string, conn *websocket.Conn, r *http.Request) {
-    store, _ := a.data.LoadOrStore(groupName, &group{
-        members: sync.Map{},
-        name:    groupName,
-    })
-    g := store.(*group)
-    if _, ok := g.members.Load(memberName); ok {
-        log.Info("替换旧的连接,group", zap.String(groupName, memberName))
-    }
-    infoStr := r.URL.Query().Get("clientInfo")
-    info := make(map[string]string)
-    if infoStr != "" {
-        if strings.HasPrefix(infoStr, "{") && strings.HasSuffix(infoStr, "}") {
-            err := json.Unmarshal([]byte(infoStr), &info)
-            if err != nil {
-                info["clientInfo"] = infoStr
-            }
-        } else {
-            info["clientInfo"] = infoStr
-        }
-    }
-    g.members.Store(memberName, NewMember(groupName, memberName, conn, info))
-}
-
-func (a *all) load(groupName, memberName string) *member {
-    if load, ok := a.data.Load(groupName); ok {
-        g := load.(*group)
-        if value, o := g.members.Load(memberName); o {
-            return value.(*member)
-        }
-    }
-    return nil
-}
-
-func match(rule, text string) bool {
-    if rule == "*" {
-        return true
-    } else if strings.HasSuffix(rule, "*") {
-        return strings.HasPrefix(text, rule[:len(rule)-2])
-    } else if strings.HasPrefix(rule, "*") {
-        return strings.HasSuffix(text, rule[1:])
-    }
-    return rule == text
-}
-
-func (a *all) loadLike(groupName, memberName string) *member {
-    if load, ok := a.data.Load(groupName); ok {
-        g := load.(*group)
-        var r *member
-        g.members.Range(func(key, value interface{}) bool {
-            if !match(memberName, key.(string)) {
-                return true
-            }
-            m := value.(*member)
-            if m.waiting < 1 {
-                r = m
-                return false
-            }
-            if r == nil {
-                r = m
-            }
-            if m.waiting < r.waiting {
-                r = m
-            }
-            return true
-        })
-        return r
-    }
-    return nil
-}
-
-func (a *all) del(groupName, memberName string) {
-    if load, ok := a.data.Load(groupName); ok {
-        g := load.(*group)
-        g.members.Delete(memberName)
-        d := true
-        g.members.Range(func(key, value interface{}) bool {
-            d = false
-            return false
-        })
-        if d {
-            a.data.Delete(groupName)
-        }
-    }
-}
-
-type all struct {
-    data       sync.Map
-    sendNum    int32
-    successNum int32
-}
-
-type group struct {
-    members sync.Map
-    name    string
-}
-
-type member struct {
-    conn       *websocket.Conn
-    name       string
-    groupName  string
-    waiting    int32
-    start      time.Time
-    sendNum    int32
-    successNum int32
-    info       map[string]string
-    messages   sync.Map
-    sender     chan *Message
-}
-
-type Message struct {
-    Id       string `json:"id"`
-    Action   string `json:"action"`
-    Param    string `json:"param"`
-    callBack chan *Result
-}
-
-type Result struct {
-    Id     string      `json:"id"`
-    Status int         `json:"status"`
-    Data   interface{} `json:"data"`
-    Msg    string      `json:"msg"`
-}
-
-func (m *member) send(message *Message) {
-    atomic.AddInt32(&m.waiting, 1)
-    atomic.AddInt32(&m.sendNum, 1)
-    atomic.AddInt32(&allWs.sendNum, 1)
-    m.messages.Store(message.Id, message)
-    m.sender <- message
-}
-
-func (m *member) over(message *Message) {
-    atomic.AddInt32(&m.waiting, -1)
-    m.messages.Delete(message.Id)
-}
-
-func NewMember(groupName, memberName string, conn *websocket.Conn, info map[string]string) *member {
-    m := &member{
-        conn:      conn,
-        name:      memberName,
-        groupName: groupName,
-        start:     time.Now(),
-        sender:    make(chan *Message, 1),
-        messages:  sync.Map{},
-        info:      info,
-    }
-    messages := &m.messages
-    over := make(chan string)
-    sendNow := make(chan []*Message)
-    go func() {
-        for {
-            time.Sleep(20 * time.Second)
-            select {
-            case sendNow <- []*Message{}:
-            case <-time.After(time.Second):
-                return
-            }
-        }
-    }()
-    go func() {
-        var w []*Message
-        num := 5
-        for {
-            if num > 300 {
-                num = 300
-            }
-            if num < 0 {
-                num = 0
-            }
-            select {
-            case <-time.After(10 * time.Millisecond):
-                num--
-                if len(w) == 0 {
-                    continue
-                }
-                doSend(conn, &w)
-            case message := <-sendNow:
-                doSend(conn, &message)
-            case message := <-m.sender:
-                w = append(w, message)
-                if len(w) >= num {
-                    if len(m.sender) > 0 {
-                        num++
-                    }
-                    doSend(conn, &w)
-                }
-            case <-over:
-                return
-            }
-        }
-    }()
-    go func() {
-        for {
-            var arr []*Result
-            _, b, err := conn.ReadMessage()
-            count := bytes.Count(b, []byte("{\"id\":\""))
-            if err != nil {
-                allWs.del(groupName, memberName)
-                over <- "over"
-                log.Info("读取错误:", zap.Error(err))
-                return
-            }
-            for i := 0; i < count; i++ {
-                result := NewResult(0, nil, "")
-                arr = append(arr, result)
-            }
-            err = json.Unmarshal(b, &arr)
-            if err != nil {
-                log.Info("json解析错误:", zap.Error(err))
-                for _, result := range arr {
-                    resultPool.Put(result)
-                }
-                break
-            }
-            for _, v := range arr {
-                if v.Id != "" {
-                    if load, ok := messages.Load(v.Id); ok {
-                        m := load.(*Message)
-                        if m.callBack != nil {
-                            m.callBack <- v
-                        }
-                    }
-                }
-            }
-            if len(arr) == 0 {
-                sendNow <- []*Message{}
-            }
-        }
-    }()
-    return m
 }
 
 func doSend(conn *websocket.Conn, w *[]*Message) {
@@ -375,7 +146,7 @@ func doExec(r *http.Request, w http.ResponseWriter, name string, groupName strin
     message.Param = param
     message.callBack = callBack
     m.send(message)
-    defer m.over(message)
+    defer m.sendOver(message)
     select {
     case r := <-callBack:
         defer resultPool.Put(r)
@@ -389,8 +160,7 @@ func doExec(r *http.Request, w http.ResponseWriter, name string, groupName strin
         if r.Status != 0 {
             w.WriteHeader(500)
         } else {
-            atomic.AddInt32(&allWs.successNum, 1)
-            atomic.AddInt32(&m.successNum, 1)
+            onSuccess(m)
         }
         w.Write(marshal)
     case _ = <-time.After(10 * time.Second):
@@ -424,11 +194,17 @@ func exec(w http.ResponseWriter, r *http.Request) {
 }
 
 func list(w http.ResponseWriter, r *http.Request) {
+    query := r.URL.Query()
+    if selectToken != query.Get("token") {
+        log.Info("token错误", zap.Any("token", query.Get("token")))
+        result := NewResult(1, nil, "token错误")
+        defer resultPool.Put(result)
+        marshal, _ := json.Marshal(result)
+        w.Write(marshal)
+        return
+    }
     v := make(map[string]map[string]interface{})
-    v["__all__"] = make(map[string]interface{})
-    v["__all__"]["sendNum"] = allWs.sendNum
-    v["__all__"]["successNum"] = allWs.successNum
-    allWs.data.Range(func(key, value interface{}) bool {
+    allWs.groups.Range(func(key, value interface{}) bool {
         g := value.(*group)
         g.members.Range(func(key, value interface{}) bool {
             m := value.(*member)
@@ -438,17 +214,11 @@ func list(w http.ResponseWriter, r *http.Request) {
                 v[m.groupName] = m2
             }
             m2[m.name] = struct {
-                Status     string      `json:"status"`
-                SendNumber int32       `json:"sendNumber"`
-                Waiting    int32       `json:"waiting"`
                 SuccessNum int32       `json:"successNum"`
                 Start      string      `json:"start"`
                 ConnTime   string      `json:"connTime"`
                 Info       interface{} `json:"info"`
-            }{"ok",
-                m.sendNum,
-                m.waiting,
-                m.successNum,
+            }{*m.data[successNum].(*int32),
                 m.start.Format(time.RFC3339),
                 time.Now().Sub(m.start).String(),
                 m.info,
@@ -465,6 +235,7 @@ func list(w http.ResponseWriter, r *http.Request) {
     w.Header().Set("content-type", "application/json; charset=utf-8")
     w.Write(b)
 }
+
 func regHandle(pattern string, handler func(http.ResponseWriter, *http.Request)) {
     log.Info("注册路径:" + pattern)
     http.HandleFunc(pattern, handler)
@@ -489,6 +260,7 @@ func main() {
     regHandle("/call", call)
     regHandle("/ws", wsIndex)
     regHandle("/list", list)
+    regHandle("/dash", dash)
     log.Info("启动服务,端口:18880")
     log.Info("当前token设置", zap.Any("token", callToken), zap.Any("wsToken", wsToken))
     err := http.ListenAndServe(":18880", nil)
