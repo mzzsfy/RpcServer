@@ -176,6 +176,7 @@ func dieLast(w http.ResponseWriter, r *http.Request) {
         mi["success"] = m.data[successNum]
         mi["fail"] = *m.data[sendNum].(*int32) - *m.data[successNum].(*int32) - m.waiting
         mi["start"] = m.start.Format(time.RFC3339)
+        mi["end"] = m.end.Format(time.RFC3339)
         mi["connTime"] = m.end.Sub(m.start).String()
     }
     b, err := json.Marshal(&v)
