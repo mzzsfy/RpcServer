@@ -48,42 +48,65 @@ func onNewMember(o *member) *member {
 
 func onNewGroup(o *group) *group {
     o.data = initDataMap()
+    c := make(chan string)
+    o.data[over] = c
+    go func() {
+        ticker := time.NewTicker(time.Second)
+        tick := ticker.C
+        data := o.data
+        m := &member{groupName: o.name}
+        for {
+            select {
+            case t := <-tick:
+                groupOnSecondDoRecord(m, 0, t)
+                last := data[lastTime].(*time.Time)
+                if t.Minute() != last.Minute() {
+                    groupOnMinuteDoRecord(m, 0, t)
+                }
+                if t.Hour() != last.Hour() {
+                    groupOnHourDoRecord(m, 0, t)
+                }
+                if t.Day() != last.Day() {
+                    groupOnDayDoRecord(m, 0, t)
+                }
+                groupDoRecordOver(m, 0, t)
+            case <-c:
+                ticker.Stop()
+                return
+            }
+        }
+    }()
     return o
 }
 
 func onNewAll(o *all) *all {
     o.data = initDataMap()
+    go func() {
+        for {
+            ticker := time.NewTicker(time.Second)
+            tick := ticker.C
+            m := &member{}
+            data := o.data
+            for {
+                select {
+                case t := <-tick:
+                    allOnSecondDoRecord(m, 0, t)
+                    last := data[lastTime].(*time.Time)
+                    if t.Minute() != last.Minute() {
+                        allOnMinuteDoRecord(m, 0, t)
+                    }
+                    if t.Hour() != last.Hour() {
+                        allOnHourDoRecord(m, 0, t)
+                    }
+                    if t.Day() != last.Day() {
+                        allOnDayDoRecord(m, 0, t)
+                    }
+                    allDoRecordOver(m, 0, t)
+                }
+            }
+        }
+    }()
     return o
-}
-
-func initDataMap() map[*bool]interface{} {
-    m := make(map[*bool]interface{})
-    m[sendNum] = new(int32)
-    m[successNum] = new(int32)
-    now := time.Now()
-    m[lastTime] = &now
-    m[lastSecondNum] = new(int32)
-    m[lastSecondRecord] = new(int32)
-    m[lastMinuteNum] = new(int32)
-    m[lastMinuteRecord] = new(int32)
-    m[lastHourNum] = new(int32)
-    m[lastHourRecord] = new(int32)
-    m[lastDayNum] = new(int32)
-    m[lastDayRecord] = new(int32)
-    return m
-}
-
-func onSuccess(m *member) {
-    atomic.AddInt32(m.data[successNum].(*int32), 1)
-}
-
-func onSendOver(m *member) int32 {
-    return atomic.AddInt32(&m.waiting, -1)
-}
-
-func onSend(m *member) {
-    atomic.AddInt32(&m.waiting, 1)
-    atomic.AddInt32(m.data[sendNum].(*int32), 1)
 }
 
 func onRemoveMember(o *member) {
@@ -103,6 +126,20 @@ func onRemoveMember(o *member) {
 }
 
 func onRemoveGroup(o *group) {
+    o.data[over].(chan string) <- "over"
+}
+
+func onSuccess(m *member) {
+    atomic.AddInt32(m.data[successNum].(*int32), 1)
+}
+
+func onSendOver(m *member) int32 {
+    return atomic.AddInt32(&m.waiting, -1)
+}
+
+func onSend(m *member) {
+    atomic.AddInt32(&m.waiting, 1)
+    atomic.AddInt32(m.data[sendNum].(*int32), 1)
 }
 
 func dash(w http.ResponseWriter, r *http.Request) {
@@ -186,6 +223,23 @@ func dieLast(w http.ResponseWriter, r *http.Request) {
     }
     w.Header().Set("content-type", "application/json; charset=utf-8")
     w.Write(b)
+}
+
+func initDataMap() map[*bool]interface{} {
+    m := make(map[*bool]interface{})
+    m[sendNum] = new(int32)
+    m[successNum] = new(int32)
+    now := time.Now()
+    m[lastTime] = &now
+    m[lastSecondNum] = new(int32)
+    m[lastSecondRecord] = new(int32)
+    m[lastMinuteNum] = new(int32)
+    m[lastMinuteRecord] = new(int32)
+    m[lastHourNum] = new(int32)
+    m[lastHourRecord] = new(int32)
+    m[lastDayNum] = new(int32)
+    m[lastDayRecord] = new(int32)
+    return m
 }
 
 func initInfoMap() map[string]interface{} {
