@@ -135,13 +135,13 @@ func (a *all) del(groupName, memberName string) {
             return false
         })
         if d {
-            onRemoveGroup(g)
             i := 0
             a.groups.Range(func(key, value interface{}) bool {
                 i++
                 return true
             })
             if i > 10 {
+                onRemoveGroup(g)
                 a.groups.Delete(groupName)
             }
         }
