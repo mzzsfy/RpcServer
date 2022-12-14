@@ -11,6 +11,7 @@
 **api 简介**
 
 - `/list` :查看当前连接的ws服务
+- `/dash` :一个简单的统计
 - `/ws`  :浏览器注入ws连接的接口
 - `/call` :执行注册的js  group={}&name={}&action={}&param={}
 - `/exec` :执行代码 group={}&name={}&code={}
@@ -24,8 +25,9 @@ group和name填写上面注入时候的，action是注册的方法名,param是�
 
 ### 安全相关
 
-设置环境变量TOKEN=xxx,则call,exec,ws接口需要在参数上携带该token
+设置环境变量TOKEN=xxx,则call,exec,ws等接口需要在参数上携带该token
 设置环境变量WS_TOKEN=xxx,则ws接口需要在参数上携带该token,覆盖TOKEN环境变量的设置
+设置环境变量SELECT_TOKEN=xxx,则list和dash接口需要在参数上携带该token,覆盖TOKEN环境变量的设置
 
 ### 支持客户端
 
