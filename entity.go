@@ -128,7 +128,7 @@ func (a *all) del(groupName, memberName string) {
         if value, o := g.members.Load(memberName); o {
             onRemoveMember(value.(*member))
         }
-        //g.members.Delete(memberName)
+        g.members.Delete(memberName)
         d := true
         g.members.Range(func(key, value interface{}) bool {
             d = false
@@ -253,7 +253,7 @@ func (m *member) doSend(w *[]*Message) {
     err := m.conn.WriteJSON(w)
     if err != nil {
         log.Info("发送失败", zap.Error(err))
-        allWs.del(m.groupName, m.name)
+        //allWs.del(m.groupName, m.name)
         e := err.Error()
         for _, m := range *w {
             m.callBack <- NewResult(1, nil, e)
