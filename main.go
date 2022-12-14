@@ -33,7 +33,7 @@ func env(name, defaultValue string) string {
     return val
 }
 
-func (a *all) saveWs(groupName, memberName string, conn *websocket.Conn) {
+func (a *all) saveWs(groupName, memberName string, conn *websocket.Conn, r *http.Request) {
     store, _ := a.data.LoadOrStore(groupName, &group{
         members: sync.Map{},
         name:    groupName,
@@ -42,7 +42,17 @@ func (a *all) saveWs(groupName, memberName string, conn *websocket.Conn) {
     if _, ok := g.members.Load(memberName); ok {
         log.Info("替换旧的连接,group", zap.String(groupName, memberName))
     }
-    g.members.Store(memberName, NewMember(groupName, memberName, conn))
+    infoStr := r.URL.Query().Get("clientInfo")
+    info := make(map[string]string)
+    if strings.HasPrefix(infoStr, "{") && strings.HasPrefix(infoStr, "}") {
+        err := json.Unmarshal([]byte(infoStr), &info)
+        if err != nil {
+            info["clientInfo"] = infoStr
+        }
+    } else {
+        info["clientInfo"] = infoStr
+    }
+    g.members.Store(memberName, NewMember(groupName, memberName, conn, info))
 }
 
 func (a *all) load(groupName, memberName string) *member {
@@ -126,6 +136,7 @@ type member struct {
     start      time.Time
     sendNum    int32
     successNum int32
+    info       map[string]string
     messages   sync.Map
     sender     chan *Message
 }
@@ -157,7 +168,7 @@ func (m *member) over(message *Message) {
     m.messages.Delete(message.Id)
 }
 
-func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
+func NewMember(groupName, memberName string, conn *websocket.Conn, info map[string]string) *member {
     m := &member{
         conn:      conn,
         name:      memberName,
@@ -165,6 +176,7 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
         start:     time.Now(),
         sender:    make(chan *Message, 1),
         messages:  sync.Map{},
+        info:      info,
     }
     messages := &m.messages
     over := make(chan string)
@@ -302,7 +314,7 @@ func wsIndex(w http.ResponseWriter, r *http.Request) {
         return
     }
     log.Info(groupName, zap.Any(name, "连接成功"))
-    allWs.saveWs(groupName, name, conn)
+    allWs.saveWs(groupName, name, conn, r)
 }
 
 func generateId() string {
@@ -424,18 +436,20 @@ func list(w http.ResponseWriter, r *http.Request) {
                 v[m.groupName] = m2
             }
             m2[m.name] = struct {
-                Status     string `json:"status"`
-                SendNumber int32  `json:"sendNumber"`
-                Waiting    int32  `json:"waiting"`
-                SuccessNum int32  `json:"successNum"`
-                Start      string `json:"start"`
-                ConnTime   string `json:"connTime"`
+                Status     string      `json:"status"`
+                SendNumber int32       `json:"sendNumber"`
+                Waiting    int32       `json:"waiting"`
+                SuccessNum int32       `json:"successNum"`
+                Start      string      `json:"start"`
+                ConnTime   string      `json:"connTime"`
+                Info       interface{} `json:"info"`
             }{"ok",
                 m.sendNum,
                 m.waiting,
                 m.successNum,
                 m.start.Format(time.RFC3339),
                 time.Now().Sub(m.start).String(),
+                m.info,
             }
             return true
         })
