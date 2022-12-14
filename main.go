@@ -201,11 +201,12 @@ func list(w http.ResponseWriter, r *http.Request) {
                 v[m.groupName] = m2
             }
             m2[m.name] = struct {
-                SuccessNum int32       `json:"successNum"`
-                Start      string      `json:"start"`
-                ConnTime   string      `json:"connTime"`
-                Info       interface{} `json:"info"`
-            }{*m.data[successNum].(*int32),
+                Waiting  int32       `json:"waiting"`
+                Start    string      `json:"start"`
+                ConnTime string      `json:"connTime"`
+                Info     interface{} `json:"info"`
+            }{
+                m.waiting,
                 m.start.Format(time.RFC3339),
                 time.Now().Sub(m.start).String(),
                 m.info,

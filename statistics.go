@@ -266,11 +266,12 @@ func groupOnSecondDoRecord(m *member, num int32, t time.Time) {
         last := data[lastTime].(*time.Time)
         //下一时间段了,清空上一次数据
         if last.Second() != t.Second() {
-            n := *data[lastSecondNum].(*int32)
-            atomic.AddInt32(data[lastSecondRecord].(*int32), n)
-            atomic.AddInt32(data[lastSecondNum].(*int32), -n)
+            *data[lastTime].(*time.Time) = time.Now()
+            n := *data[sendNum].(*int32) - *data[lastSecondRecord].(*int32)
+            *data[lastSecondRecord].(*int32) = *data[sendNum].(*int32)
+            *data[lastSecondNum].(*int32) = n
         }
-        atomic.AddInt32(data[lastSecondNum].(*int32), num)
+        atomic.AddInt32(data[sendNum].(*int32), num)
     }
     allOnSecondDoRecord(m, num, t)
 }
@@ -282,15 +283,13 @@ func groupOnMinuteDoRecord(m *member, num int32, t time.Time) {
         last := data[lastTime].(*time.Time)
         //下一时间段了,清空上一次数据
         if last.Minute() != t.Minute() {
-            n := *data[lastMinuteNum].(*int32)
-            atomic.AddInt32(data[lastMinuteRecord].(*int32), n)
-            atomic.AddInt32(data[lastMinuteNum].(*int32), -n)
+            n := *data[sendNum].(*int32) - *data[lastMinuteRecord].(*int32)
+            *data[lastMinuteRecord].(*int32) = *data[sendNum].(*int32)
+            *data[lastMinuteNum].(*int32) = n
         }
-        atomic.AddInt32(data[lastMinuteNum].(*int32), num)
     }
     allOnMinuteDoRecord(m, num, t)
 }
-
 func groupOnHourDoRecord(m *member, num int32, t time.Time) {
     if v, ok := allWs.groups.Load(m.groupName); ok {
         g := v.(*group)
@@ -298,29 +297,24 @@ func groupOnHourDoRecord(m *member, num int32, t time.Time) {
         last := data[lastTime].(*time.Time)
         //下一时间段了,清空上一次数据
         if last.Hour() != t.Hour() {
-            n := *data[lastHourNum].(*int32)
-            atomic.AddInt32(data[lastHourRecord].(*int32), n)
-            atomic.AddInt32(data[lastHourNum].(*int32), -n)
+            n := *data[sendNum].(*int32) - *data[lastHourRecord].(*int32)
+            *data[lastHourRecord].(*int32) = *data[sendNum].(*int32)
+            *data[lastHourNum].(*int32) = n
         }
-        atomic.AddInt32(data[lastHourNum].(*int32), num)
     }
     allOnHourDoRecord(m, num, t)
 }
-
 func groupOnDayDoRecord(m *member, num int32, t time.Time) {
     if v, ok := allWs.groups.Load(m.groupName); ok {
         g := v.(*group)
         data := g.data
         last := data[lastTime].(*time.Time)
         //下一时间段了,清空上一次数据
-        atomic.AddInt32(data[sendNum].(*int32), num)
-        atomic.AddInt32(data[successNum].(*int32), num)
         if last.Day() != t.Day() {
-            n := *data[lastDayNum].(*int32)
-            atomic.AddInt32(data[lastDayRecord].(*int32), n)
-            atomic.AddInt32(data[lastDayNum].(*int32), -n)
+            n := *data[sendNum].(*int32) - *data[lastDayRecord].(*int32)
+            *data[lastDayRecord].(*int32) = *data[sendNum].(*int32)
+            *data[lastDayNum].(*int32) = n
         }
-        atomic.AddInt32(data[lastDayNum].(*int32), num)
     }
     allOnDayDoRecord(m, num, t)
 }
@@ -330,11 +324,11 @@ func allOnSecondDoRecord(m *member, num int32, t time.Time) {
     last := data[lastTime].(*time.Time)
     //下一时间段了,清空上一次数据
     if last.Second() != t.Second() {
-        n := *data[lastSecondNum].(*int32)
-        atomic.AddInt32(data[lastSecondRecord].(*int32), n)
-        atomic.AddInt32(data[lastSecondNum].(*int32), -n)
+        n := *data[sendNum].(*int32) - *data[lastSecondRecord].(*int32)
+        *data[lastSecondRecord].(*int32) = *data[sendNum].(*int32)
+        *data[lastSecondNum].(*int32) = n
     }
-    atomic.AddInt32(data[lastSecondNum].(*int32), num)
+    atomic.AddInt32(data[sendNum].(*int32), num)
 }
 
 func allOnMinuteDoRecord(m *member, num int32, t time.Time) {
@@ -342,11 +336,10 @@ func allOnMinuteDoRecord(m *member, num int32, t time.Time) {
     last := data[lastTime].(*time.Time)
     //下一时间段了,清空上一次数据
     if last.Minute() != t.Minute() {
-        n := *data[lastMinuteNum].(*int32)
-        atomic.AddInt32(data[lastMinuteRecord].(*int32), n)
-        atomic.AddInt32(data[lastMinuteNum].(*int32), -n)
+        n := *data[sendNum].(*int32) - *data[lastMinuteRecord].(*int32)
+        *data[lastMinuteRecord].(*int32) = *data[sendNum].(*int32)
+        *data[lastMinuteNum].(*int32) = n
     }
-    atomic.AddInt32(data[lastMinuteNum].(*int32), num)
 }
 
 func allOnHourDoRecord(m *member, num int32, t time.Time) {
@@ -354,11 +347,10 @@ func allOnHourDoRecord(m *member, num int32, t time.Time) {
     last := data[lastTime].(*time.Time)
     //下一时间段了,清空上一次数据
     if last.Hour() != t.Hour() {
-        n := *data[lastHourNum].(*int32)
-        atomic.AddInt32(data[lastHourRecord].(*int32), n)
-        atomic.AddInt32(data[lastHourNum].(*int32), -n)
+        n := *data[sendNum].(*int32) - *data[lastHourRecord].(*int32)
+        *data[lastHourRecord].(*int32) = *data[sendNum].(*int32)
+        *data[lastHourNum].(*int32) = n
     }
-    atomic.AddInt32(data[lastHourNum].(*int32), num)
 }
 
 func allOnDayDoRecord(m *member, num int32, t time.Time) {
@@ -366,9 +358,8 @@ func allOnDayDoRecord(m *member, num int32, t time.Time) {
     last := data[lastTime].(*time.Time)
     //下一时间段了,清空上一次数据
     if last.Day() != t.Day() {
-        n := *data[lastDayNum].(*int32)
-        atomic.AddInt32(data[lastDayRecord].(*int32), n)
-        atomic.AddInt32(data[lastDayNum].(*int32), -n)
+        n := *data[sendNum].(*int32) - *data[lastDayRecord].(*int32)
+        *data[lastDayRecord].(*int32) = *data[sendNum].(*int32)
+        *data[lastDayNum].(*int32) = n
     }
-    atomic.AddInt32(data[lastDayNum].(*int32), num)
 }
