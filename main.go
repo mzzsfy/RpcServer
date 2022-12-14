@@ -434,7 +434,7 @@ func newAsyncConsole() *asyncConsole {
             select {
             case b := <-cache:
                 str += b
-                if len(str) > 1000 {
+                if len(str) > 3000 {
                     os.Stdout.WriteString(str)
                     str = ""
                 }
@@ -446,6 +446,9 @@ func newAsyncConsole() *asyncConsole {
                     }
                 }
             case <-time.After(10 * time.Millisecond):
+                if str == "" {
+                    continue
+                }
                 os.Stdout.WriteString(str)
                 str = ""
             }

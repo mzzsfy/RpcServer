@@ -77,8 +77,17 @@ demo.regAction("hello2", function (param) {
     访问接口，获得js端的返回值
     http://localhost:18880/call?group=test&name=*&action=hello2&param=test
 
+### 压测
+
+cpu i5-8500
+
+- 单线程: 响应1ms内,吞吐量接近2k/s
+- 10线程: 响应1ms-6ms,吞吐量约1w/s
+- 100线程: 响应1-40ms,吞吐量约2.1w/s
+- 1000线程: 响应2-80ms,吞吐量约2.6w/s
+
 ### 感谢
 
 本项目灵感来自 https://github.com/jxhczhl/JsRpc 非常感谢
 
-主要解决了原项目中并发问题,并且针对高并发解决了一系列优化,实测i5-8500 大约2w/秒左右吞吐量,1000线程,压测时间超过5分钟
+主要解决了原项目中并发问题,提供模糊匹配功能,并且针对高并发解决了一系列优化 https://github.com/jxhczhl/JsRpc/issues/7
