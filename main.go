@@ -153,6 +153,12 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
     messages := &m.messages
     over := make(chan string)
     sendNow := make(chan interface{})
+    conn.SetCloseHandler(
+        func(code int, text string) error {
+            allWs.del(groupName, memberName)
+            over <- "over"
+            return nil
+        })
     go func() {
         for {
             time.Sleep(20 * time.Second)
@@ -183,11 +189,9 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
                 w = []*Message{}
                 if err != nil {
                     log.Info("发送失败", zap.Error(err))
-                    if strings.Contains(err.Error(), "broken pipe") {
-                        conn.Close()
-                    }
                 }
             case message := <-sendNow:
+                conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
                 conn.WriteJSON(message)
             case message := <-m.sender:
                 w = append(w, message)
@@ -202,21 +206,19 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
                     }
                 }
             case <-over:
-                break
+                return
             }
         }
     }()
     go func() {
         for {
             var arr []*Result
+            conn.SetReadDeadline(time.Now().Add(30 * time.Second))
             _, b, err := conn.ReadMessage()
             count := bytes.Count(b, []byte("{\"id\":\""))
             if err != nil {
                 log.Info("ws连接错误:", zap.Error(err))
-                over <- err.Error()
-                conn.Close()
-                allWs.del(groupName, memberName)
-                break
+                return
             }
             for i := 0; i < count; i++ {
                 result := NewResult(0, nil, "")
