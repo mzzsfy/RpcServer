@@ -26,8 +26,8 @@ var (
 )
 
 func env(name, defaultValue string) string {
-    val := os.Getenv(name)
-    if val == "" {
+    val, b := os.LookupEnv(name)
+    if !b {
         return defaultValue
     }
     return val
