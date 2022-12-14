@@ -31,9 +31,6 @@ func onNewMember(o *member) *member {
     c := make(chan string)
     o.data[over] = c
     go func() {
-        //now := time.Now()
-        //统一到整秒
-        //time.Sleep(time.Now().Sub(now.Add(time.Millisecond * time.Duration(1000-now.UnixMilli()%1000))))
         ticker := time.NewTicker(time.Second)
         tick := ticker.C
         for {
@@ -106,7 +103,6 @@ func onRemoveMember(o *member) {
 }
 
 func onRemoveGroup(o *group) {
-    //todo
 }
 
 func dash(w http.ResponseWriter, r *http.Request) {
@@ -211,7 +207,7 @@ func initInfoMap() map[string]interface{} {
 
 func fillInfoMap(m map[string]interface{}, i map[*bool]interface{}) {
     send := *i[sendNum].(*int32)
-    m["send"] = i[sendNum]
+    m["send"] = send
 
     m["second"] = send - *i[lastSecondRecord].(*int32)
     m["minute"] = send - *i[lastMinuteRecord].(*int32)
@@ -225,53 +221,56 @@ func fillInfoMap(m map[string]interface{}, i map[*bool]interface{}) {
 }
 
 func doRecord(o *member, t time.Time) {
-    nowSend := *o.data[sendNum].(*int32)
-    record := *o.data[lastSecondRecord].(*int32)
+    data := o.data
+    nowSend := *data[sendNum].(*int32)
+    record := *data[lastSecondRecord].(*int32)
     num := nowSend - record
 
-    *o.data[lastSecondNum].(*int32) = num
-    *o.data[lastSecondRecord].(*int32) = nowSend
+    *data[lastSecondNum].(*int32) = num
+    *data[lastSecondRecord].(*int32) = nowSend
     //将信息向上传递
     groupOnSecondDoRecord(o, num, t)
+    last := data[lastTime].(*time.Time)
     //统计分钟
-    if t.Second() == 0 {
-        record := *o.data[lastMinuteRecord].(*int32)
+    if t.Minute() != last.Minute() {
+        record := *data[lastMinuteRecord].(*int32)
         num := nowSend - record
-        *o.data[lastMinuteNum].(*int32) = num
-        *o.data[lastMinuteRecord].(*int32) = nowSend
+        *data[lastMinuteNum].(*int32) = num
+        *data[lastMinuteRecord].(*int32) = nowSend
         groupOnMinuteDoRecord(o, num, t)
     }
     //统计小时
-    if t.Second() == 0 && t.Minute() == 0 {
-        record := *o.data[lastHourRecord].(*int32)
+    if t.Hour() != last.Hour() {
+        record := *data[lastHourRecord].(*int32)
         num := nowSend - record
-        *o.data[lastHourNum].(*int32) = num
-        *o.data[lastHourRecord].(*int32) = nowSend
+        *data[lastHourNum].(*int32) = num
+        *data[lastHourRecord].(*int32) = nowSend
         groupOnHourDoRecord(o, num, t)
     }
     //统计天
-    if t.Second() == 0 && t.Minute() == 0 && t.Hour() == 0 {
-        record := *o.data[lastDayRecord].(*int32)
+    if t.Day() != last.Day() {
+        record := *data[lastDayRecord].(*int32)
         num := nowSend - record
-        *o.data[lastDayNum].(*int32) = num
-        *o.data[lastDayRecord].(*int32) = nowSend
+        *data[lastDayNum].(*int32) = num
+        *data[lastDayRecord].(*int32) = nowSend
         groupOnDayDoRecord(o, num, t)
     }
+    *data[lastTime].(*time.Time) = t
+    groupDoRecordOver(o, num, t)
 }
 
 func groupOnSecondDoRecord(m *member, num int32, t time.Time) {
     if v, ok := allWs.groups.Load(m.groupName); ok {
         g := v.(*group)
         data := g.data
+        atomic.AddInt32(data[sendNum].(*int32), num)
         last := data[lastTime].(*time.Time)
         //下一时间段了,清空上一次数据
         if last.Second() != t.Second() {
-            *data[lastTime].(*time.Time) = time.Now()
             n := *data[sendNum].(*int32) - *data[lastSecondRecord].(*int32)
             *data[lastSecondRecord].(*int32) = *data[sendNum].(*int32)
             *data[lastSecondNum].(*int32) = n
         }
-        atomic.AddInt32(data[sendNum].(*int32), num)
     }
     allOnSecondDoRecord(m, num, t)
 }
@@ -281,7 +280,6 @@ func groupOnMinuteDoRecord(m *member, num int32, t time.Time) {
         g := v.(*group)
         data := g.data
         last := data[lastTime].(*time.Time)
-        //下一时间段了,清空上一次数据
         if last.Minute() != t.Minute() {
             n := *data[sendNum].(*int32) - *data[lastMinuteRecord].(*int32)
             *data[lastMinuteRecord].(*int32) = *data[sendNum].(*int32)
@@ -295,7 +293,6 @@ func groupOnHourDoRecord(m *member, num int32, t time.Time) {
         g := v.(*group)
         data := g.data
         last := data[lastTime].(*time.Time)
-        //下一时间段了,清空上一次数据
         if last.Hour() != t.Hour() {
             n := *data[sendNum].(*int32) - *data[lastHourRecord].(*int32)
             *data[lastHourRecord].(*int32) = *data[sendNum].(*int32)
@@ -309,7 +306,6 @@ func groupOnDayDoRecord(m *member, num int32, t time.Time) {
         g := v.(*group)
         data := g.data
         last := data[lastTime].(*time.Time)
-        //下一时间段了,清空上一次数据
         if last.Day() != t.Day() {
             n := *data[sendNum].(*int32) - *data[lastDayRecord].(*int32)
             *data[lastDayRecord].(*int32) = *data[sendNum].(*int32)
@@ -322,7 +318,6 @@ func groupOnDayDoRecord(m *member, num int32, t time.Time) {
 func allOnSecondDoRecord(m *member, num int32, t time.Time) {
     data := allWs.data
     last := data[lastTime].(*time.Time)
-    //下一时间段了,清空上一次数据
     if last.Second() != t.Second() {
         n := *data[sendNum].(*int32) - *data[lastSecondRecord].(*int32)
         *data[lastSecondRecord].(*int32) = *data[sendNum].(*int32)
@@ -334,7 +329,6 @@ func allOnSecondDoRecord(m *member, num int32, t time.Time) {
 func allOnMinuteDoRecord(m *member, num int32, t time.Time) {
     data := allWs.data
     last := data[lastTime].(*time.Time)
-    //下一时间段了,清空上一次数据
     if last.Minute() != t.Minute() {
         n := *data[sendNum].(*int32) - *data[lastMinuteRecord].(*int32)
         *data[lastMinuteRecord].(*int32) = *data[sendNum].(*int32)
@@ -345,7 +339,6 @@ func allOnMinuteDoRecord(m *member, num int32, t time.Time) {
 func allOnHourDoRecord(m *member, num int32, t time.Time) {
     data := allWs.data
     last := data[lastTime].(*time.Time)
-    //下一时间段了,清空上一次数据
     if last.Hour() != t.Hour() {
         n := *data[sendNum].(*int32) - *data[lastHourRecord].(*int32)
         *data[lastHourRecord].(*int32) = *data[sendNum].(*int32)
@@ -356,10 +349,23 @@ func allOnHourDoRecord(m *member, num int32, t time.Time) {
 func allOnDayDoRecord(m *member, num int32, t time.Time) {
     data := allWs.data
     last := data[lastTime].(*time.Time)
-    //下一时间段了,清空上一次数据
     if last.Day() != t.Day() {
         n := *data[sendNum].(*int32) - *data[lastDayRecord].(*int32)
         *data[lastDayRecord].(*int32) = *data[sendNum].(*int32)
         *data[lastDayNum].(*int32) = n
     }
+}
+
+func groupDoRecordOver(m *member, num int32, t time.Time) {
+    if v, ok := allWs.groups.Load(m.groupName); ok {
+        g := v.(*group)
+        data := g.data
+        *data[lastTime].(*time.Time) = t
+    }
+    allDoRecordOver(m, num, t)
+}
+
+func allDoRecordOver(m *member, num int32, t time.Time) {
+    data := allWs.data
+    *data[lastTime].(*time.Time) = t
 }
