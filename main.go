@@ -251,6 +251,9 @@ func wsIndex(w http.ResponseWriter, r *http.Request) {
         name = "_generate_" + generateId()
         log.Info("ws未命名,分配名称:" + name)
     }
+    if "true" == query.Get("randomSuffix") {
+        name = name + "__" + generateId()
+    }
     up := &websocket.Upgrader{
         CheckOrigin: func(r *http.Request) bool { return true },
     }
