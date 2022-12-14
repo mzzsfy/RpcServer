@@ -15,10 +15,11 @@
 - `/call` :执行注册的js  group={}&name={}&action={}&param={}
 - `/exec` :执行js group={}&name={}&code={}
 
-说明：接口用?group和name来区分任务 如 ws://127.0.0.1:18880/ws?group={}&name={}"
-//注入ws的例子 group和name都可以随便起名 name为空则会随机
-http://127.0.0.1:18880/call?group={}&name={}&action={}&param={} //这是调用的接口,name为*时取本组任意一个,不保证顺序
-group和name填写上面注入时候的，action是注册的方法名,param是可选的参数
+说明：接口用?group和name来区分任务 如 ws://127.0.0.1:18880/ws?group={}&name={}"  
+//注入ws的例子 group和name都可以随便起名 name为空则会随机  
+http://127.0.0.1:18880/call?group={}&name={}&action={}&param={} //这是调用的接口  
+name支持简单模糊匹配,模糊匹配时有简单均衡负载,支持前缀后缀匹配或者任意: xxx* 或*xxx  
+group和name填写上面注入时候的，action是注册的方法名,param是可选的参数  
 
 ### 注入JS，构建通信环境
 
