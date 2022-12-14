@@ -195,9 +195,9 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
                 if len(w) == 0 {
                     continue
                 }
-                doSend(conn, w)
+                doSend(conn, &w)
             case message := <-sendNow:
-                conn.SetWriteDeadline(time.Now().Add(30 * time.Second))
+                conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
                 conn.WriteJSON(message)
             case message := <-m.sender:
                 w = append(w, message)
@@ -205,7 +205,7 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
                     if len(m.sender) > 0 {
                         num++
                     }
-                    doSend(conn, w)
+                    doSend(conn, &w)
                 }
             case <-over:
                 return
@@ -253,16 +253,16 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
     return m
 }
 
-func doSend(conn *websocket.Conn, w []*Message) {
+func doSend(conn *websocket.Conn, w *[]*Message) {
     err := conn.WriteJSON(w)
-    w = []*Message{}
     if err != nil {
         log.Info("发送失败", zap.Error(err))
         e := err.Error()
-        for _, m := range w {
+        for _, m := range *w {
             m.callBack <- NewResult(1, nil, e)
         }
     }
+    w = &[]*Message{}
 }
 
 func index(w http.ResponseWriter, r *http.Request) {
