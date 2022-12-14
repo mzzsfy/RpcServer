@@ -13,7 +13,7 @@
 - `/list` :查看当前连接的ws服务
 - `/ws`  :浏览器注入ws连接的接口
 - `/call` :执行注册的js  group={}&name={}&action={}&param={}
-- `/exec` :执行js group={}&name={}&code={}
+- `/exec` :执行代码 group={}&name={}&code={}
 
 说明：接口用?group和name来区分任务 如 ws://127.0.0.1:18880/ws?group={}&name={}"  
 //注入ws的例子 group和name都可以随便起名 name为空则会随机  
@@ -21,6 +21,11 @@ http://127.0.0.1:18880/call?group={}&name={}&action={}&param={} //这是调用�
 name支持简单模糊匹配,模糊匹配时有简单均衡负载,支持前缀后缀匹配或者任意: xxx* 或*xxx  
 group和name填写上面注入时候的，action是注册的方法名,param是可选的参数  
 额外说明: randomSuffix参数可以在名称后自动生成后缀
+
+### 安全相关
+
+设置环境变量TOKEN=xxx,则call,exec,ws接口需要在参数上携带该token
+设置环境变量WS_TOKEN=xxx,则ws接口需要在参数上携带该token,覆盖TOKEN环境变量的设置
 
 ### 支持客户端
 
