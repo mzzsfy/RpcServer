@@ -169,7 +169,6 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
                 if len(w) == 0 {
                     continue
                 }
-                log.Info("111", zap.Any("num", num))
                 err := conn.WriteJSON(w)
                 w = []*Message{}
                 if err != nil {
@@ -401,7 +400,7 @@ func main() {
     //    time.Sleep(60 * time.Second)
     //    println("写入分析中")
     //    pprof.StopCPUProfile()
-    //    println("写入分析完成")
+    //    println("写入分析完成,请执行 go tool pprof -http=:8888 cpu.pprof")
     //    os.Exit(0)
     //}()
     regHandle("/", index)
@@ -428,28 +427,27 @@ func init() {
 }
 
 func newAsyncConsole() *asyncConsole {
-    cache := make(chan string, 1000)
+    cache := make(chan string, 2000)
     go func() {
-        num := 0
+        str := ""
         for {
             select {
             case b := <-cache:
-                num++
-                os.Stdout.WriteString(b)
-                i := len(cache)
+                str += b
+                if len(str) > 1000 {
+                    os.Stdout.WriteString(str)
+                    str = ""
+                }
+                i := len(cache) - 10
                 if i > 200 {
-                    os.Stdout.WriteString(fmt.Sprintln("待写入日志过多,丢弃", i, "条"))
+                    str += "待写入日志过多,丢弃" + fmt.Sprint(i) + "条\n"
                     for j := 0; j < i; j++ {
                         <-cache
                     }
-                    os.Stdout.Sync()
-                    continue
-                }
-                if num%100 == 0 {
-                    os.Stdout.Sync()
                 }
             case <-time.After(10 * time.Millisecond):
-                os.Stdout.Sync()
+                os.Stdout.WriteString(str)
+                str = ""
             }
         }
     }()
