@@ -131,6 +131,7 @@ func dash(w http.ResponseWriter, r *http.Request) {
             m := value.(*member)
             addInfo(m, mi, gi, ai)
             mi["info"] = m.info
+            mi["waiting"] = m.waiting
             return true
         })
         gm["__all__"] = gi
@@ -148,13 +149,13 @@ func dash(w http.ResponseWriter, r *http.Request) {
 
 func initInfoMap() map[string]interface{} {
     m := make(map[string]interface{})
-    m["sendNum"] = int32(0)
-    m["successNum"] = int32(0)
-    m["failNum"] = int32(0)
-    m["lastSecondNum"] = int32(0)
-    m["lastMinuteNum"] = int32(0)
-    m["lastHourNum"] = int32(0)
-    m["lastDayNum"] = int32(0)
+    m["send"] = int32(0)
+    m["success"] = int32(0)
+    m["fail"] = int32(0)
+    m["lastSecond"] = int32(0)
+    m["lastMinute"] = int32(0)
+    m["lastHour"] = int32(0)
+    m["lastDay"] = int32(0)
     //m["lastSecondRecord"] = int32(0)
     //m["lastMinuteRecord"] = int32(0)
     //m["lastHourRecord"] = int32(0)
@@ -167,13 +168,13 @@ func addInfo(m *member, ms ...map[string]interface{}) {
     }
 }
 func doAddInfo(m *member, i map[string]interface{}) {
-    i["sendNum"] = i["sendNum"].(int32) + *m.data[sendNum].(*int32)
-    i["successNum"] = i["successNum"].(int32) + *m.data[successNum].(*int32)
-    i["failNum"] = i["failNum"].(int32) + (i["sendNum"].(int32) - i["successNum"].(int32) - m.waiting)
-    i["lastSecondNum"] = i["lastSecondNum"].(int32) + *m.data[lastSecondNum].(*int32)
-    i["lastMinuteNum"] = i["lastMinuteNum"].(int32) + *m.data[lastMinuteNum].(*int32)
-    i["lastHourNum"] = i["lastHourNum"].(int32) + *m.data[lastHourNum].(*int32)
-    i["lastDayNum"] = i["lastDayNum"].(int32) + *m.data[lastDayNum].(*int32)
+    i["send"] = i["send"].(int32) + *m.data[sendNum].(*int32)
+    i["success"] = i["success"].(int32) + *m.data[successNum].(*int32)
+    i["fail"] = i["fail"].(int32) + (i["send"].(int32) - i["success"].(int32) - m.waiting)
+    i["lastSecond"] = i["lastSecond"].(int32) + *m.data[lastSecondNum].(*int32)
+    i["lastMinute"] = i["lastMinute"].(int32) + *m.data[lastMinuteNum].(*int32)
+    i["lastHour"] = i["lastHour"].(int32) + *m.data[lastHourNum].(*int32)
+    i["lastDay"] = i["lastDayNum"].(int32) + *m.data[lastDayNum].(*int32)
 
     //i["lastSecondRecord"] = i["lastSecondRecord"].(int32) + *m.data[lastSecondRecord].(*int32)
     //i["lastMinuteRecord"] = i["lastMinuteRecord"].(int32) + *m.data[lastMinuteRecord].(*int32)
