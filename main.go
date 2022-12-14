@@ -33,10 +33,6 @@ func env(name, defaultValue string) string {
     return val
 }
 
-type all struct {
-    data sync.Map
-}
-
 func (a *all) saveWs(groupName, memberName string, conn *websocket.Conn) {
     store, _ := a.data.LoadOrStore(groupName, &group{
         members: sync.Map{},
@@ -111,19 +107,27 @@ func (a *all) del(groupName, memberName string) {
     }
 }
 
+type all struct {
+    data       sync.Map
+    sendNum    int32
+    successNum int32
+}
+
 type group struct {
     members sync.Map
     name    string
 }
 
 type member struct {
-    conn      *websocket.Conn
-    name      string
-    groupName string
-    waiting   int32
-    sendNum   int32
-    messages  sync.Map
-    sender    chan *Message
+    conn       *websocket.Conn
+    name       string
+    groupName  string
+    waiting    int32
+    start      time.Time
+    sendNum    int32
+    successNum int32
+    messages   sync.Map
+    sender     chan *Message
 }
 
 type Message struct {
@@ -143,6 +147,7 @@ type Result struct {
 func (m *member) send(message *Message) {
     atomic.AddInt32(&m.waiting, 1)
     atomic.AddInt32(&m.sendNum, 1)
+    atomic.AddInt32(&allWs.sendNum, 1)
     m.messages.Store(message.Id, message)
     m.sender <- message
 }
@@ -157,6 +162,7 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
         conn:      conn,
         name:      memberName,
         groupName: groupName,
+        start:     time.Now(),
         sender:    make(chan *Message, 1),
         messages:  sync.Map{},
     }
@@ -189,13 +195,9 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
                 if len(w) == 0 {
                     continue
                 }
-                err := conn.WriteJSON(w)
-                w = []*Message{}
-                if err != nil {
-                    log.Info("发送失败", zap.Error(err))
-                }
+                doSend(conn, w)
             case message := <-sendNow:
-                conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+                conn.SetWriteDeadline(time.Now().Add(30 * time.Second))
                 conn.WriteJSON(message)
             case message := <-m.sender:
                 w = append(w, message)
@@ -203,11 +205,7 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
                     if len(m.sender) > 0 {
                         num++
                     }
-                    err := conn.WriteJSON(w)
-                    w = []*Message{}
-                    if err != nil {
-                        log.Info("发送失败", zap.Error(err))
-                    }
+                    doSend(conn, w)
                 }
             case <-over:
                 return
@@ -253,6 +251,18 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
         }
     }()
     return m
+}
+
+func doSend(conn *websocket.Conn, w []*Message) {
+    err := conn.WriteJSON(w)
+    w = []*Message{}
+    if err != nil {
+        log.Info("发送失败", zap.Error(err))
+        e := err.Error()
+        for _, m := range w {
+            m.callBack <- NewResult(1, nil, e)
+        }
+    }
 }
 
 func index(w http.ResponseWriter, r *http.Request) {
@@ -364,6 +374,9 @@ func doExec(r *http.Request, w http.ResponseWriter, name string, groupName strin
         }
         if r.Status != 0 {
             w.WriteHeader(500)
+        } else {
+            atomic.AddInt32(&allWs.successNum, 1)
+            atomic.AddInt32(&m.successNum, 1)
         }
         w.Write(marshal)
     case _ = <-time.After(10 * time.Second):
@@ -398,6 +411,9 @@ func exec(w http.ResponseWriter, r *http.Request) {
 
 func list(w http.ResponseWriter, r *http.Request) {
     v := make(map[string]map[string]interface{})
+    v["__all__"] = make(map[string]interface{})
+    v["__all__"]["sendNum"] = allWs.sendNum
+    v["__all__"]["successNum"] = allWs.successNum
     allWs.data.Range(func(key, value interface{}) bool {
         g := value.(*group)
         g.members.Range(func(key, value interface{}) bool {
@@ -408,10 +424,13 @@ func list(w http.ResponseWriter, r *http.Request) {
                 v[m.groupName] = m2
             }
             m2[m.name] = struct {
-                Status     string `json:"status"`
-                SendNumber int32  `json:"sendNumber"`
-                Waiting    int32  `json:"waiting"`
-            }{"ok", m.sendNum, m.waiting}
+                Status     string        `json:"status"`
+                SendNumber int32         `json:"sendNumber"`
+                Waiting    int32         `json:"waiting"`
+                SuccessNum int32         `json:"successNum"`
+                Start      time.Time     `json:"start"`
+                ConnTime   time.Duration `json:"connTime"`
+            }{"ok", m.sendNum, m.waiting, m.successNum, m.start, time.Now().Sub(m.start)}
             return true
         })
         return true
