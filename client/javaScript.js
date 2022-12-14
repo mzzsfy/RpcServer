@@ -8,12 +8,18 @@ function rpcClient(wsURL) {
         "_execjs": async param => (await new Function(param).call(this)) || "没有返回值"
     }
     this.connect()
-    setInterval(()=>this.socket.send("[]"),25*1000)
+    setInterval(() => this.socket.send("[]"), 25 * 1000)
 }
 
 WebSocket.prototype.send1 = function (o) {
     this.waiting.push(o)
     if (this.waiting.length >= 100) {
+        this.sendNow()
+    }
+}
+
+WebSocket.prototype.sendNow = function () {
+    if (this.waiting.length>0){
         let waiting = this.waiting
         this.waiting = []
         this.send("[" + waiting.join(",") + "]")
@@ -73,6 +79,7 @@ rpcClient.prototype.connect = function () {
                 arr = arr.slice(10)
             }
             await doSend(t, arr)
+            socket.sendNow()
         }
     } catch (e) {
         console.log("connection failed,reconnect after 3s");
