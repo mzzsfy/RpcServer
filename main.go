@@ -248,6 +248,7 @@ func main() {
     regHandle("/ws", wsIndex)
     regHandle("/list", list)
     regHandle("/dash", dash)
+    regHandle("/die", dieLast)
     log.Info("启动服务,端口:18880")
     log.Info("当前token设置", zap.Any("token", callToken), zap.Any("wsToken", wsToken))
     err := http.ListenAndServe(":18880", nil)

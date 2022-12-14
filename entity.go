@@ -13,7 +13,6 @@ import (
 
 type all struct {
     groups sync.Map
-    dieWs  sync.Map
     data   map[*bool]interface{}
 }
 
@@ -28,6 +27,7 @@ type member struct {
     name      string
     groupName string
     start     time.Time
+    end       *time.Time
     info      map[string]string
     messages  sync.Map
     sender    chan *Message
