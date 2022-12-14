@@ -69,7 +69,7 @@ func (a *all) loadLike(groupName, memberName string) *member {
                 return true
             }
             m := value.(*member)
-            if m.waiting <= 3 {
+            if m.waiting < 1 {
                 r = m
                 return false
             }
