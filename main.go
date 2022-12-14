@@ -5,7 +5,10 @@ import (
     "encoding/json"
     "fmt"
     "github.com/gorilla/websocket"
+    "go.uber.org/zap"
+    "go.uber.org/zap/zapcore"
     "net/http"
+    "os"
     "strings"
     "sync"
     "sync/atomic"
@@ -17,6 +20,7 @@ var (
     id          int32
     messagePool = sync.Pool{New: func() interface{} { return &Message{} }}
     resultPool  = sync.Pool{New: func() interface{} { return &Result{} }}
+    log         *zap.Logger
 )
 
 type all struct {
@@ -30,7 +34,7 @@ func (a *all) saveWs(groupName, memberName string, conn *websocket.Conn) {
     })
     g := store.(*group)
     if _, ok := g.members.Load(memberName); ok {
-        fmt.Println("替换旧的连接,group", groupName, "name", memberName)
+        log.Info("替换旧的连接,group", zap.String(groupName, memberName))
     }
     g.members.Store(memberName, NewMember(groupName, memberName, conn))
 }
@@ -143,7 +147,7 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
         conn:      conn,
         name:      memberName,
         groupName: groupName,
-        sender:    make(chan *Message),
+        sender:    make(chan *Message, 1),
         messages:  sync.Map{},
     }
     messages := &m.messages
@@ -159,7 +163,7 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
                 err := conn.WriteJSON(w)
                 w = []*Message{}
                 if err != nil {
-                    fmt.Println("发送失败", err)
+                    log.Info("发送失败", zap.Error(err))
                 }
             case message := <-m.sender:
                 w = append(w, message)
@@ -167,7 +171,7 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
                     err := conn.WriteJSON(w)
                     w = []*Message{}
                     if err != nil {
-                        fmt.Println("发送失败", err)
+                        log.Info("发送失败", zap.Error(err))
                     }
                 }
             case <-over:
@@ -181,7 +185,7 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
             _, b, err := conn.ReadMessage()
             count := bytes.Count(b, []byte("{\"id\":\""))
             if err != nil {
-                fmt.Println("ws连接错误:", err)
+                log.Info("ws连接错误:", zap.Error(err))
                 over <- err.Error()
                 allWs.del(groupName, memberName)
                 break
@@ -192,7 +196,7 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
             }
             err = json.Unmarshal(b, &arr)
             if err != nil {
-                fmt.Println("json解析错误:", err)
+                log.Info("json解析错误:", zap.Error(err))
                 for _, result := range arr {
                     resultPool.Put(result)
                 }
@@ -227,18 +231,18 @@ func wsIndex(w http.ResponseWriter, r *http.Request) {
     }
     if name == "" {
         name = "_generate_" + generateId()
-        fmt.Println("ws未命名,分配名称", name)
+        log.Info("ws未命名,分配名称:" + name)
     }
     up := &websocket.Upgrader{
         CheckOrigin: func(r *http.Request) bool { return true },
     }
     conn, err := up.Upgrade(w, r, nil)
     if err != nil {
-        fmt.Println("websocket err:", err)
+        log.Info("websocket err:", zap.Error(err))
         w.Write([]byte(fmt.Sprint("websocket err:", err)))
         return
     }
-    fmt.Println(groupName, name, "连接成功")
+    log.Info(groupName, zap.Any(name, "连接成功"))
     allWs.saveWs(groupName, name, conn)
 }
 
@@ -264,48 +268,51 @@ func call(w http.ResponseWriter, r *http.Request) {
 }
 
 func doExec(w http.ResponseWriter, name string, groupName string, action string, param string) {
+    start := time.Now()
     w.Header().Set("content-type", "application/json; charset=utf-8")
-    var load *member
+    var m *member
     if strings.Contains(name, "*") {
-        load = allWs.loadLike(groupName, name)
+        m = allWs.loadLike(groupName, name)
     } else {
-        load = allWs.load(groupName, name)
+        m = allWs.load(groupName, name)
     }
-    if load == nil {
-        fmt.Println("没有找到指定连接", groupName, name)
+    if m == nil {
+        log.Info("没有找到指定连接", zap.Any(groupName, name))
         result := NewResult(1, nil, "没有找到指定连接")
         defer resultPool.Put(result)
         marshal, _ := json.Marshal(result)
         w.Write(marshal)
         return
     }
-    callBack := make(chan *Result)
+    callBack := make(chan *Result, 1)
     i := generateId()
-    fmt.Println(i, "call", groupName, name, action, param)
     message := messagePool.Get().(*Message)
     defer messagePool.Put(message)
     message.Id = i
     message.Action = action
     message.Param = param
     message.callBack = callBack
-    load.send(message)
-    defer load.over(message)
+    m.send(message)
+    defer m.over(message)
     select {
     case r := <-callBack:
         defer resultPool.Put(r)
         marshal, err := json.Marshal(r)
-        fmt.Println(i, "res", string(marshal))
+        log.Info("请求结束", zap.Any("id", i), zap.Any(groupName, m.name), zap.Any("call", action+"->"+param), zap.Any("time", time.Now().UnixMilli()-start.UnixMilli()), zap.Any("res", string(marshal)))
         if err != nil {
             w.WriteHeader(500)
             w.Write([]byte(err.Error()))
             return
+        }
+        if r.Status != 0 {
+            w.WriteHeader(500)
         }
         w.Write(marshal)
     case _ = <-time.After(10 * time.Second):
         result := NewResult(1, nil, "超时")
         defer resultPool.Put(result)
         marshal, _ := json.Marshal(result)
-        fmt.Println(i, "res", "超时")
+        log.Info("请求超时", zap.Any("id", i), zap.Any(groupName, m.name), zap.Any("call", action+"->"+param), zap.String("res", "超时"))
         w.WriteHeader(500)
         w.Write(marshal)
     }
@@ -360,21 +367,95 @@ func list(w http.ResponseWriter, r *http.Request) {
     w.Write(b)
 }
 func regHandle(pattern string, handler func(http.ResponseWriter, *http.Request)) {
-    fmt.Println("注册路径:", pattern)
+    log.Info("注册路径:" + pattern)
     http.HandleFunc(pattern, handler)
 }
 
 //todo:初始化后服务器下发指令
 func main() {
+    //f, _ := os.OpenFile("cpu.pprof", os.O_CREATE|os.O_RDWR, 0644)
+    //e := pprof.StartCPUProfile(f)
+    //if e != nil {
+    //    println("性能分析启动错误", e)
+    //}
+    //go func() {
+    //    time.Sleep(60 * time.Second)
+    //    println("写入分析中")
+    //    pprof.StopCPUProfile()
+    //    println("写入分析完成")
+    //    os.Exit(0)
+    //}()
     regHandle("/", index)
     regHandle("/exec", exec)
     regHandle("/call", call)
     regHandle("/ws", wsIndex)
     regHandle("/list", list)
-    println("启动服务,端口:18880")
+    log.Info("启动服务,端口:18880")
     err := http.ListenAndServe(":18880", nil)
     if err != nil {
-        println("启动服务错误", err.Error())
+        log.Error("启动服务错误", zap.Error(err))
         return
     }
+}
+
+func init() {
+    config := zap.NewProductionEncoderConfig()
+    config.CallerKey = ""
+    config.EncodeTime = zapcore.TimeEncoderOfLayout("2006-01-02 15:04:05")
+    encoder := zapcore.NewConsoleEncoder(config)
+    log = zap.New(
+        zapcore.NewCore(encoder, newAsyncConsole(), zap.NewAtomicLevel()),
+    )
+}
+
+func newAsyncConsole() *asyncConsole {
+    cache := make(chan string, 1000)
+    go func() {
+        var bs []string
+        for {
+            select {
+            case b := <-cache:
+                bs = append(bs, b)
+                if len(bs) >= 100 {
+                    for _, bw := range bs {
+                        os.Stdout.WriteString(bw)
+                    }
+                    bs = []string{}
+                    i := len(cache)
+                    if i > 100 {
+                        os.Stdout.WriteString(fmt.Sprintln("待写入日志过多,丢弃", i, "条"))
+                    }
+                    for j := 0; j < i; j++ {
+                        <-cache
+                    }
+                    os.Stdout.Sync()
+                }
+            case <-time.After(3 * time.Millisecond):
+                if len(bs) == 0 {
+                    continue
+                }
+                for _, bw := range bs {
+                    os.Stdout.WriteString(bw)
+                }
+                os.Stdout.Sync()
+                bs = []string{}
+            }
+        }
+    }()
+    return &asyncConsole{
+        cache,
+    }
+}
+
+type asyncConsole struct {
+    cache chan string
+}
+
+func (c asyncConsole) Write(p []byte) (n int, err error) {
+    c.cache <- string(p)
+    return len(p), nil
+}
+
+func (c asyncConsole) Sync() error {
+    return nil
 }
