@@ -177,9 +177,8 @@ func dieLast(w http.ResponseWriter, r *http.Request) {
         }
         fillInfoMap(mi, m.data)
         mi["info"] = m.info
-        mi["successNum"] = m.data[successNum]
+        mi["success"] = m.data[successNum]
         mi["fail"] = *m.data[sendNum].(*int32) - *m.data[successNum].(*int32) - m.waiting
-        mi["info"] = m.info
         mi["start"] = m.start.Format(time.RFC3339)
         mi["connTime"] = m.end.Sub(m.start).String()
     }
@@ -195,8 +194,8 @@ func dieLast(w http.ResponseWriter, r *http.Request) {
 func initInfoMap() map[string]interface{} {
     m := make(map[string]interface{})
     m["send"] = int32(0)
-    m["success"] = int32(0)
-    m["fail"] = int32(0)
+    //m["success"] = int32(0)
+    //m["fail"] = int32(0)
 
     m["second"] = int32(0)
     m["minute"] = int32(0)
@@ -213,6 +212,7 @@ func initInfoMap() map[string]interface{} {
 func fillInfoMap(m map[string]interface{}, i map[*bool]interface{}) {
     send := *i[sendNum].(*int32)
     m["send"] = i[sendNum]
+
     m["second"] = send - *i[lastSecondRecord].(*int32)
     m["minute"] = send - *i[lastMinuteRecord].(*int32)
     m["hour"] = send - *i[lastHourRecord].(*int32)
