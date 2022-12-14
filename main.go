@@ -55,7 +55,7 @@ func match(rule, text string) bool {
     } else if strings.HasSuffix(rule, "*") {
         return strings.HasPrefix(text, rule[:len(rule)-2])
     } else if strings.HasPrefix(rule, "*") {
-        return strings.HasSuffix(text, rule[2:])
+        return strings.HasSuffix(text, rule[1:])
     }
     return rule == text
 }
@@ -152,6 +152,7 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
     }
     messages := &m.messages
     over := make(chan string)
+    sendNow := make(chan interface{})
     go func() {
         var w []*Message
         for {
@@ -165,6 +166,8 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
                 if err != nil {
                     log.Info("发送失败", zap.Error(err))
                 }
+            case message := <-sendNow:
+                conn.WriteJSON(message)
             case message := <-m.sender:
                 w = append(w, message)
                 if len(w) >= 100 {
@@ -187,6 +190,7 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
             if err != nil {
                 log.Info("ws连接错误:", zap.Error(err))
                 over <- err.Error()
+                conn.Close()
                 allWs.del(groupName, memberName)
                 break
             }
@@ -211,6 +215,9 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
                         }
                     }
                 }
+            }
+            if len(arr) == 0 {
+                sendNow <- []interface{}{}
             }
         }
     }()
