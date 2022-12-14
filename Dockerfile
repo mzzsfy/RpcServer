@@ -6,7 +6,7 @@ COPY . .
 
 COPY docker-entrypoint.sh /run/
 
-RUN apk add --no-cache git && CGO_ENABLED=0 go build -o /run/app -ldflags="-w -s"
+RUN apk add --no-cache git && CGO_ENABLED=0 go build -o /run/app -ldflags="-w -s" && chmod 777 /run/*
 
 FROM alpine
 
