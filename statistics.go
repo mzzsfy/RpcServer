@@ -174,7 +174,7 @@ func doAddInfo(m *member, i map[string]interface{}) {
     i["lastSecond"] = i["lastSecond"].(int32) + *m.data[lastSecondNum].(*int32)
     i["lastMinute"] = i["lastMinute"].(int32) + *m.data[lastMinuteNum].(*int32)
     i["lastHour"] = i["lastHour"].(int32) + *m.data[lastHourNum].(*int32)
-    i["lastDay"] = i["lastDayNum"].(int32) + *m.data[lastDayNum].(*int32)
+    i["lastDay"] = i["lastDay"].(int32) + *m.data[lastDayNum].(*int32)
 
     //i["lastSecondRecord"] = i["lastSecondRecord"].(int32) + *m.data[lastSecondRecord].(*int32)
     //i["lastMinuteRecord"] = i["lastMinuteRecord"].(int32) + *m.data[lastMinuteRecord].(*int32)
