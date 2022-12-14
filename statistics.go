@@ -101,6 +101,7 @@ func onSend(m *member) {
 }
 
 func onRemoveMember(o *member) {
+    o.conn.Close()
     o.data[over].(chan string) <- "over"
 }
 

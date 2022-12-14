@@ -45,7 +45,7 @@ type Message struct {
 type Result struct {
     Id     string      `json:"id"`
     Status int         `json:"status"`
-    Data   interface{} `json:"groups"`
+    Data   interface{} `json:"data"`
     Msg    string      `json:"msg"`
 }
 
@@ -191,16 +191,16 @@ func NewMember(groupName, memberName string, conn *websocket.Conn, info map[stri
                 if len(w) == 0 {
                     continue
                 }
-                doSend(conn, &w)
+                m.doSend(&w)
             case message := <-sendNow:
-                doSend(conn, &message)
+                m.doSend(&message)
             case message := <-m.sender:
                 w = append(w, message)
                 if len(w) >= num {
                     if len(m.sender) > 0 {
                         num++
                     }
-                    doSend(conn, &w)
+                    m.doSend(&w)
                 }
             case <-over:
                 return
@@ -246,4 +246,18 @@ func NewMember(groupName, memberName string, conn *websocket.Conn, info map[stri
         }
     }()
     return m
+}
+
+func (m *member) doSend(w *[]*Message) {
+    m.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+    err := m.conn.WriteJSON(w)
+    if err != nil {
+        log.Info("发送失败", zap.Error(err))
+        allWs.del(m.groupName, m.name)
+        e := err.Error()
+        for _, m := range *w {
+            m.callBack <- NewResult(1, nil, e)
+        }
+    }
+    *w = []*Message{}
 }
