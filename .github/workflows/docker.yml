@@ -36,8 +36,8 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: |
-            ${{ secrets.DOCKER_HUB_USERNAME }}/js-rpc-server:latest
-            ${{ secrets.DOCKER_HUB_USERNAME }}/js-rpc-server:${{steps.date.outputs.time}}
+            ${{ secrets.DOCKER_HUB_USERNAME }}/rpc-server:latest
+            ${{ secrets.DOCKER_HUB_USERNAME }}/rpc-server:${{steps.date.outputs.time}}
           platforms: |
             linux/amd64
             linux/arm/v6
