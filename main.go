@@ -262,7 +262,7 @@ func doSend(conn *websocket.Conn, w *[]*Message) {
             m.callBack <- NewResult(1, nil, e)
         }
     }
-    w = &[]*Message{}
+    *w = []*Message{}
 }
 
 func index(w http.ResponseWriter, r *http.Request) {
