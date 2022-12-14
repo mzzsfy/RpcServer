@@ -136,7 +136,14 @@ func (a *all) del(groupName, memberName string) {
         })
         if d {
             onRemoveGroup(g)
-            a.groups.Delete(groupName)
+            i := 0
+            a.groups.Range(func(key, value interface{}) bool {
+                i++
+                return true
+            })
+            if i > 10 {
+                a.groups.Delete(groupName)
+            }
         }
     }
 }
@@ -252,8 +259,8 @@ func (m *member) doSend(w *[]*Message) {
     m.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
     err := m.conn.WriteJSON(w)
     if err != nil {
-        log.Info("发送失败", zap.Error(err))
-        //allWs.del(m.groupName, m.name)
+        log.Info("发送失败", zap.String(m.groupName, m.name), zap.Error(err))
+        allWs.del(m.groupName, m.name)
         e := err.Error()
         for _, m := range *w {
             m.callBack <- NewResult(1, nil, e)

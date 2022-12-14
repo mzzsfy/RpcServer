@@ -14,6 +14,7 @@ var (
     dieWsLock        = sync.Mutex{}
     sendNum          = new(bool) //总次数
     successNum       = new(bool) //成功次数
+    lastTime         = new(bool) //上一次的秒数
     lastSecondNum    = new(bool) //上一秒发送的次数
     lastMinuteNum    = new(bool) //上一分钟发送的总次数的记录
     lastHourNum      = new(bool) //上一小时发送的总次数的记录
@@ -30,6 +31,9 @@ func onNewMember(o *member) *member {
     c := make(chan string)
     o.data[over] = c
     go func() {
+        //now := time.Now()
+        //统一到整秒
+        //time.Sleep(time.Now().Sub(now.Add(time.Millisecond * time.Duration(1000-now.UnixMilli()%1000))))
         ticker := time.NewTicker(time.Second)
         tick := ticker.C
         for {
@@ -59,6 +63,8 @@ func initDataMap() map[*bool]interface{} {
     m := make(map[*bool]interface{})
     m[sendNum] = new(int32)
     m[successNum] = new(int32)
+    now := time.Now()
+    m[lastTime] = &now
     m[lastSecondNum] = new(int32)
     m[lastSecondRecord] = new(int32)
     m[lastMinuteNum] = new(int32)
@@ -126,9 +132,11 @@ func dash(w http.ResponseWriter, r *http.Request) {
             mi := initInfoMap()
             gm[key.(string)] = mi
             m := value.(*member)
-            addInfo(m, mi)
+            fillInfoMap(mi, m.data)
             mi["info"] = m.info
             mi["waiting"] = m.waiting
+            mi["successNum"] = m.data[successNum]
+            mi["fail"] = *m.data[sendNum].(*int32) - *m.data[successNum].(*int32) - m.waiting
             return true
         })
         gm["__all__"] = gi
@@ -167,7 +175,10 @@ func dieLast(w http.ResponseWriter, r *http.Request) {
         } else {
             mg[m.name] = mi
         }
-        addInfo(m, mi)
+        fillInfoMap(mi, m.data)
+        mi["info"] = m.info
+        mi["successNum"] = m.data[successNum]
+        mi["fail"] = *m.data[sendNum].(*int32) - *m.data[successNum].(*int32) - m.waiting
         mi["info"] = m.info
         mi["start"] = m.start.Format(time.RFC3339)
         mi["connTime"] = m.end.Sub(m.start).String()
@@ -181,22 +192,6 @@ func dieLast(w http.ResponseWriter, r *http.Request) {
     w.Write(b)
 }
 
-func fillInfoMap(m map[string]interface{}, i map[*bool]interface{}) {
-    send := *i[sendNum].(*int32)
-    m["send"] = i[sendNum]
-    m["success"] = send
-    m["fail"] = send - *i[successNum].(*int32)
-
-    m["second"] = send - *i[lastSecondNum].(*int32)
-    m["minute"] = send - *i[lastMinuteNum].(*int32)
-    m["hour"] = send - *i[lastHourNum].(*int32)
-    m["day"] = send - *i[lastDayNum].(*int32)
-
-    m["lastSecond"] = i[lastSecondNum]
-    m["lastMinute"] = i[lastMinuteNum]
-    m["lastHour"] = i[lastHourNum]
-    m["lastDay"] = i[lastDayNum]
-}
 func initInfoMap() map[string]interface{} {
     m := make(map[string]interface{})
     m["send"] = int32(0)
@@ -214,25 +209,19 @@ func initInfoMap() map[string]interface{} {
     m["lastDay"] = int32(0)
     return m
 }
-func addInfo(m *member, ms ...map[string]interface{}) {
-    for _, i := range ms {
-        doAddInfo(m, i)
-    }
-}
-func doAddInfo(m *member, i map[string]interface{}) {
-    i["send"] = i["send"].(int32) + *m.data[sendNum].(*int32)
-    i["success"] = i["success"].(int32) + *m.data[successNum].(*int32)
-    i["fail"] = i["fail"].(int32) + (i["send"].(int32) - i["success"].(int32) - m.waiting)
 
-    i["second"] = i["second"].(int32) + (*m.data[sendNum].(*int32) - *m.data[lastSecondNum].(*int32))
-    i["minute"] = i["minute"].(int32) + (*m.data[sendNum].(*int32) - *m.data[lastMinuteNum].(*int32))
-    i["hour"] = i["hour"].(int32) + (*m.data[sendNum].(*int32) - *m.data[lastHourNum].(*int32))
-    i["day"] = i["day"].(int32) + (*m.data[sendNum].(*int32) - *m.data[lastDayNum].(*int32))
+func fillInfoMap(m map[string]interface{}, i map[*bool]interface{}) {
+    send := *i[sendNum].(*int32)
+    m["send"] = i[sendNum]
+    m["second"] = send - *i[lastSecondRecord].(*int32)
+    m["minute"] = send - *i[lastMinuteRecord].(*int32)
+    m["hour"] = send - *i[lastHourRecord].(*int32)
+    m["day"] = send - *i[lastDayRecord].(*int32)
 
-    i["lastSecond"] = i["lastSecond"].(int32) + *m.data[lastSecondNum].(*int32)
-    i["lastMinute"] = i["lastMinute"].(int32) + *m.data[lastMinuteNum].(*int32)
-    i["lastHour"] = i["lastHour"].(int32) + *m.data[lastHourNum].(*int32)
-    i["lastDay"] = i["lastDay"].(int32) + *m.data[lastDayNum].(*int32)
+    m["lastSecond"] = i[lastSecondNum]
+    m["lastMinute"] = i[lastMinuteNum]
+    m["lastHour"] = i[lastHourNum]
+    m["lastDay"] = i[lastDayNum]
 }
 
 func doRecord(o *member, t time.Time) {
@@ -243,14 +232,14 @@ func doRecord(o *member, t time.Time) {
     *o.data[lastSecondNum].(*int32) = num
     *o.data[lastSecondRecord].(*int32) = nowSend
     //将信息向上传递
-    groupOnSecondDoRecord(o, num)
+    groupOnSecondDoRecord(o, num, t)
     //统计分钟
     if t.Second() == 0 {
         record := *o.data[lastMinuteRecord].(*int32)
         num := nowSend - record
         *o.data[lastMinuteNum].(*int32) = num
         *o.data[lastMinuteRecord].(*int32) = nowSend
-        groupOnMinuteDoRecord(o, num)
+        groupOnMinuteDoRecord(o, num, t)
     }
     //统计小时
     if t.Second() == 0 && t.Minute() == 0 {
@@ -258,7 +247,7 @@ func doRecord(o *member, t time.Time) {
         num := nowSend - record
         *o.data[lastHourNum].(*int32) = num
         *o.data[lastHourRecord].(*int32) = nowSend
-        groupOnHourDoRecord(o, num)
+        groupOnHourDoRecord(o, num, t)
     }
     //统计天
     if t.Second() == 0 && t.Minute() == 0 && t.Hour() == 0 {
@@ -266,42 +255,120 @@ func doRecord(o *member, t time.Time) {
         num := nowSend - record
         *o.data[lastDayNum].(*int32) = num
         *o.data[lastDayRecord].(*int32) = nowSend
-        groupOnDayDoRecord(o, num)
+        groupOnDayDoRecord(o, num, t)
     }
 }
 
-func groupOnSecondDoRecord(m *member, num int32) {
+func groupOnSecondDoRecord(m *member, num int32, t time.Time) {
     if v, ok := allWs.groups.Load(m.groupName); ok {
         g := v.(*group)
-        *g.data[lastSecondNum].(*int32) = num
-        //*g.data[lastSecondRecord].(*int32) = nowSend
+        data := g.data
+        last := data[lastTime].(*time.Time)
+        //下一时间段了,清空上一次数据
+        if last.Second() != t.Second() {
+            n := *data[lastSecondNum].(*int32)
+            atomic.AddInt32(data[lastSecondRecord].(*int32), n)
+            atomic.AddInt32(data[lastSecondNum].(*int32), -n)
+        }
+        atomic.AddInt32(data[lastSecondNum].(*int32), num)
     }
+    allOnSecondDoRecord(m, num, t)
 }
 
-func groupOnMinuteDoRecord(m *member, num int32) {
-
+func groupOnMinuteDoRecord(m *member, num int32, t time.Time) {
+    if v, ok := allWs.groups.Load(m.groupName); ok {
+        g := v.(*group)
+        data := g.data
+        last := data[lastTime].(*time.Time)
+        //下一时间段了,清空上一次数据
+        if last.Minute() != t.Minute() {
+            n := *data[lastMinuteNum].(*int32)
+            atomic.AddInt32(data[lastMinuteRecord].(*int32), n)
+            atomic.AddInt32(data[lastMinuteNum].(*int32), -n)
+        }
+        atomic.AddInt32(data[lastMinuteNum].(*int32), num)
+    }
+    allOnMinuteDoRecord(m, num, t)
 }
 
-func groupOnHourDoRecord(m *member, num int32) {
-
+func groupOnHourDoRecord(m *member, num int32, t time.Time) {
+    if v, ok := allWs.groups.Load(m.groupName); ok {
+        g := v.(*group)
+        data := g.data
+        last := data[lastTime].(*time.Time)
+        //下一时间段了,清空上一次数据
+        if last.Hour() != t.Hour() {
+            n := *data[lastHourNum].(*int32)
+            atomic.AddInt32(data[lastHourRecord].(*int32), n)
+            atomic.AddInt32(data[lastHourNum].(*int32), -n)
+        }
+        atomic.AddInt32(data[lastHourNum].(*int32), num)
+    }
+    allOnHourDoRecord(m, num, t)
 }
 
-func groupOnDayDoRecord(m *member, num int32) {
-
+func groupOnDayDoRecord(m *member, num int32, t time.Time) {
+    if v, ok := allWs.groups.Load(m.groupName); ok {
+        g := v.(*group)
+        data := g.data
+        last := data[lastTime].(*time.Time)
+        //下一时间段了,清空上一次数据
+        atomic.AddInt32(data[sendNum].(*int32), num)
+        atomic.AddInt32(data[successNum].(*int32), num)
+        if last.Day() != t.Day() {
+            n := *data[lastDayNum].(*int32)
+            atomic.AddInt32(data[lastDayRecord].(*int32), n)
+            atomic.AddInt32(data[lastDayNum].(*int32), -n)
+        }
+        atomic.AddInt32(data[lastDayNum].(*int32), num)
+    }
+    allOnDayDoRecord(m, num, t)
 }
 
-func allOnSecondDoRecord(m *member, num int32) {
-
+func allOnSecondDoRecord(m *member, num int32, t time.Time) {
+    data := allWs.data
+    last := data[lastTime].(*time.Time)
+    //下一时间段了,清空上一次数据
+    if last.Second() != t.Second() {
+        n := *data[lastSecondNum].(*int32)
+        atomic.AddInt32(data[lastSecondRecord].(*int32), n)
+        atomic.AddInt32(data[lastSecondNum].(*int32), -n)
+    }
+    atomic.AddInt32(data[lastSecondNum].(*int32), num)
 }
 
-func allOnMinuteDoRecord(m *member, num int32) {
-
+func allOnMinuteDoRecord(m *member, num int32, t time.Time) {
+    data := allWs.data
+    last := data[lastTime].(*time.Time)
+    //下一时间段了,清空上一次数据
+    if last.Minute() != t.Minute() {
+        n := *data[lastMinuteNum].(*int32)
+        atomic.AddInt32(data[lastMinuteRecord].(*int32), n)
+        atomic.AddInt32(data[lastMinuteNum].(*int32), -n)
+    }
+    atomic.AddInt32(data[lastMinuteNum].(*int32), num)
 }
 
-func allOnHourDoRecord(m *member, num int32) {
-
+func allOnHourDoRecord(m *member, num int32, t time.Time) {
+    data := allWs.data
+    last := data[lastTime].(*time.Time)
+    //下一时间段了,清空上一次数据
+    if last.Hour() != t.Hour() {
+        n := *data[lastHourNum].(*int32)
+        atomic.AddInt32(data[lastHourRecord].(*int32), n)
+        atomic.AddInt32(data[lastHourNum].(*int32), -n)
+    }
+    atomic.AddInt32(data[lastHourNum].(*int32), num)
 }
 
-func allOnDayDoRecord(m *member, num int32) {
-
+func allOnDayDoRecord(m *member, num int32, t time.Time) {
+    data := allWs.data
+    last := data[lastTime].(*time.Time)
+    //下一时间段了,清空上一次数据
+    if last.Day() != t.Day() {
+        n := *data[lastDayNum].(*int32)
+        atomic.AddInt32(data[lastDayRecord].(*int32), n)
+        atomic.AddInt32(data[lastDayNum].(*int32), -n)
+    }
+    atomic.AddInt32(data[lastDayNum].(*int32), num)
 }
