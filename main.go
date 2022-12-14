@@ -153,12 +153,6 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
     messages := &m.messages
     over := make(chan string)
     sendNow := make(chan interface{})
-    conn.SetCloseHandler(
-        func(code int, text string) error {
-            allWs.del(groupName, memberName)
-            over <- "over"
-            return nil
-        })
     go func() {
         for {
             time.Sleep(20 * time.Second)
@@ -217,7 +211,9 @@ func NewMember(groupName, memberName string, conn *websocket.Conn) *member {
             _, b, err := conn.ReadMessage()
             count := bytes.Count(b, []byte("{\"id\":\""))
             if err != nil {
-                log.Info("ws连接错误:", zap.Error(err))
+                allWs.del(groupName, memberName)
+                over <- "over"
+                log.Info("读取错误:", zap.Error(err))
                 return
             }
             for i := 0; i < count; i++ {
