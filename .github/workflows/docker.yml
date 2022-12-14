@@ -22,7 +22,11 @@ jobs:
       - name: Set up Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@v1
-      
+        
+      - name: Get current date
+        id: date
+        run: echo "::set-output name=time::$(date +'%m-%d_%H-%M-%S')"
+
       # build 并且 push docker 镜像
       - name: Build and push
         id: docker_build
@@ -31,7 +35,9 @@ jobs:
           context: ./
           file: ./Dockerfile
           push: true
-          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/js-rpc-server:latest
+          tags: |
+            ${{ secrets.DOCKER_HUB_USERNAME }}/js-rpc-server:latest
+            ${{ secrets.DOCKER_HUB_USERNAME }}/${{steps.date.outputs.time}}:latest
           platforms: |
             linux/amd64
             linux/arm/v6
