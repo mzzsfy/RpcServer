@@ -2,7 +2,7 @@
 
 ## 基本介绍
 
-运行服务器程序和js脚本 即可让它们通信，实现调用接口执行js获取想要的值(加解密)
+运行服务器程序和js脚本 即可让它们通信，实现调用接口执行js获取想要的值
 
 ## 食用方法
 
@@ -23,7 +23,7 @@ group和name填写上面注入时候的，action是注册的方法名,param是�
 
 ### 注入JS，构建通信环境
 
-打开client.js 复制粘贴到网站控制台(注意：可以在浏览器开启的时候就先注入环境，不然要放开调试断点才能注入)
+打开client/javaScript.js 复制粘贴到网站控制台(注意：可以在浏览器开启的时候就先注入环境，不然要放开调试断点才能注入)
 
 ### 连接通信
 
@@ -40,10 +40,8 @@ var demo = new rpcClient("ws://127.0.0.1:18880/ws?group=test");
 
 ```js
 let jscode = `
-(function(){
-    console.log("test")
-    return "执行成功"
-})()
+console.log("test")
+return "执行成功"
 `
 
 let url = "http://localhost:18880/exec?group=test&name=*&code="+decodeURIComponent(jscode)
@@ -60,7 +58,7 @@ consloe.log(res.text)
 // 注册一个方法 第一个参数hello为方法名，
 demo.regAction("hello", function () {
     //这样每次调用就会返回“好困啊+随机整数”
-    return "好困啊"+parseInt(Math.random()*1000);
+    return "hello"+parseInt(Math.random()*1000);
 })
 ```
 
@@ -81,4 +79,6 @@ demo.regAction("hello2", function (param) {
 
 ### 感谢
 
-本项目灵感来自 https://github.com/jxhczhl/JsRpc
+本项目灵感来自 https://github.com/jxhczhl/JsRpc 非常感谢
+
+主要解决了原项目中并发问题,并且针对高并发解决了一系列优化,实测i5-8500 大约2w/秒左右吞吐量,1000线程,压测时间超过5分钟
