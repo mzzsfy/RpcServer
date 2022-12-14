@@ -128,7 +128,7 @@ func (a *all) del(groupName, memberName string) {
         if value, o := g.members.Load(memberName); o {
             onRemoveMember(value.(*member))
         }
-        g.members.Delete(memberName)
+        //g.members.Delete(memberName)
         d := true
         g.members.Range(func(key, value interface{}) bool {
             d = false
