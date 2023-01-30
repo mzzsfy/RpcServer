@@ -173,8 +173,9 @@ func NewMember(groupName, memberName string, conn *websocket.Conn, info map[stri
     over := make(chan string)
     sendNow := make(chan []*Message)
     go func() {
+        tick := time.Tick(20 * time.Second)
         for {
-            time.Sleep(20 * time.Second)
+            <-tick
             select {
             case sendNow <- []*Message{}:
             case <-time.After(time.Second):
@@ -185,6 +186,7 @@ func NewMember(groupName, memberName string, conn *websocket.Conn, info map[stri
     go func() {
         var w []*Message
         num := 5
+        tick := time.Tick(20 * time.Millisecond)
         for {
             if num > 300 {
                 num = 300
@@ -193,7 +195,7 @@ func NewMember(groupName, memberName string, conn *websocket.Conn, info map[stri
                 num = 0
             }
             select {
-            case <-time.After(10 * time.Millisecond):
+            case <-tick:
                 num--
                 if len(w) == 0 {
                     continue
@@ -242,7 +244,11 @@ func NewMember(groupName, memberName string, conn *websocket.Conn, info map[stri
                     if load, ok := messages.Load(v.Id); ok {
                         m := load.(*Message)
                         if m.callBack != nil {
-                            m.callBack <- v
+                            select {
+                            case m.callBack <- v:
+                            default:
+                                log.Info("收到超时rpc返回值", zap.Any("id", m.Id), zap.Any("res", v))
+                            }
                         }
                     }
                 }
@@ -263,7 +269,10 @@ func (m *member) doSend(w *[]*Message) {
         allWs.del(m.groupName, m.name)
         e := err.Error()
         for _, m := range *w {
-            m.callBack <- NewResult(1, nil, e)
+            select {
+            case m.callBack <- NewResult(1, nil, e):
+            default:
+            }
         }
     }
     *w = []*Message{}

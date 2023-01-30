@@ -8,6 +8,7 @@ import (
     "go.uber.org/zap/zapcore"
     "net/http"
     "os"
+    "strconv"
     "strings"
     "sync"
     "sync/atomic"
@@ -124,7 +125,7 @@ func doExec(req *http.Request, w http.ResponseWriter, name string, groupName str
         w.Write(marshal)
         return
     }
-    callBack := make(chan *Result, 1)
+    callBack := make(chan *Result)
     i := generateId()
     message := messagePool.Get().(*Message)
     defer messagePool.Put(message)
@@ -134,6 +135,13 @@ func doExec(req *http.Request, w http.ResponseWriter, name string, groupName str
     message.callBack = callBack
     m.send(message)
     defer m.sendOver(message)
+    timeout := 10
+    if query.Get("timeout") != "" {
+        i, err := strconv.Atoi(query.Get("timeout"))
+        if err != nil && i > 0 {
+            timeout = i
+        }
+    }
     select {
     case r := <-callBack:
         defer resultPool.Put(r)
@@ -150,7 +158,7 @@ func doExec(req *http.Request, w http.ResponseWriter, name string, groupName str
             onSuccess(m)
         }
         w.Write(marshal)
-    case _ = <-time.After(10 * time.Second):
+    case _ = <-time.After(time.Duration(timeout) * time.Second):
         result := NewResult(1, nil, "超时")
         defer resultPool.Put(result)
         marshal, _ := json.Marshal(result)
