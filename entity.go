@@ -224,7 +224,7 @@ func NewMember(groupName, memberName string, conn *websocket.Conn, info map[stri
             if err != nil {
                 allWs.del(groupName, memberName)
                 over <- "over"
-                log.Info("读取错误:", zap.Error(err))
+                log.Info("读取ws发生错误:", zap.Error(err))
                 return
             }
             for i := 0; i < count; i++ {
@@ -233,7 +233,7 @@ func NewMember(groupName, memberName string, conn *websocket.Conn, info map[stri
             }
             err = json.Unmarshal(b, &arr)
             if err != nil {
-                log.Info("json解析错误:", zap.Error(err))
+                log.Info("读取ws返回值时json解析错误:", zap.Any("res", string(b)), zap.Error(err))
                 for _, result := range arr {
                     resultPool.Put(result)
                 }
