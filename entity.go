@@ -30,6 +30,7 @@ type member struct {
     end       *time.Time
     info      map[string]string
     messages  sync.Map
+    over      func()
     sender    chan *Message
     waiting   int32
     data      map[*bool]interface{}
@@ -140,7 +141,7 @@ func (a *all) del(groupName, memberName string) {
                 i++
                 return true
             })
-            if i > 10 {
+            if i == 0 {
                 onRemoveGroup(g)
                 a.groups.Delete(groupName)
             }
@@ -160,6 +161,8 @@ func (m *member) sendOver(message *Message) {
 }
 
 func NewMember(groupName, memberName string, conn *websocket.Conn, info map[string]string) *member {
+    over := make(chan struct{})
+    once := sync.Once{}
     m := onNewMember(&member{
         conn:      conn,
         name:      memberName,
@@ -168,9 +171,9 @@ func NewMember(groupName, memberName string, conn *websocket.Conn, info map[stri
         sender:    make(chan *Message, 1),
         messages:  sync.Map{},
         info:      info,
+        over:      func() { once.Do(func() { close(over) }) },
     })
     messages := &m.messages
-    over := make(chan string)
     sendNow := make(chan []*Message)
     go func() {
         tick := time.Tick(20 * time.Second)
@@ -222,8 +225,8 @@ func NewMember(groupName, memberName string, conn *websocket.Conn, info map[stri
             _, b, err := conn.ReadMessage()
             count := bytes.Count(b, []byte("{\"id\":\""))
             if err != nil {
+                m.over()
                 allWs.del(groupName, memberName)
-                over <- "over"
                 log.Info("读取ws发生错误:", zap.Error(err))
                 return
             }
@@ -262,8 +265,12 @@ func NewMember(groupName, memberName string, conn *websocket.Conn, info map[stri
 }
 
 func (m *member) doSend(w *[]*Message) {
-    m.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-    err := m.conn.WriteJSON(w)
+    err := m.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+    if err != nil {
+        m.over()
+        return
+    }
+    err = m.conn.WriteJSON(w)
     if err != nil {
         log.Info("发送失败", zap.String(m.groupName, m.name), zap.Error(err))
         allWs.del(m.groupName, m.name)
