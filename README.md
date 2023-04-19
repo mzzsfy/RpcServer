@@ -1,5 +1,5 @@
 # JsRPC
-
+[![](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2Fmzzsfy%2FRpcServer&count_bg=%2379C83D&title_bg=%23555555&icon=&icon_color=%23E7E7E7&title=hits&edge_flat=false)](https://github.com/mzzsfy)
 ## 基本介绍
 
 运行服务器程序和js脚本 即可让它们通信，实现调用接口执行js获取想要的值
