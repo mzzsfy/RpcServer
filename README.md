@@ -51,4 +51,4 @@ cpu i5-8500
 
 本项目灵感来自 https://github.com/jxhczhl/JsRpc 非常感谢
 
-主要解决了原项目中并发问题,提供模糊匹配功能,并且针对高并发解决了一系列优化 https://github.com/jxhczhl/JsRpc/issues/7
+主要解决了原项目中并发问题,提供模糊匹配功能,并且针对高并发解决了一系列优化 https://github.com/jxhczhl/JsRpc/issues/7 (对方把我反馈删了,笑)
